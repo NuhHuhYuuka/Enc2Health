@@ -219,5 +219,5 @@ enc2health/
 ---
 
 <div align="center">
-  <p><strong>NT219.Q2.ANTT</strong> · Kiến trúc D — Hybrid Adaptive · UIT 2025</p>
+  <p><strong>NT219.Q2.ANTT</strong> · Kiến trúc D — Hybrid Adaptive </p>
 </div>
