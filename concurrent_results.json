@@ -1,0 +1,52 @@
+[
+  {
+    "n_clients": 1,
+    "total_queries": 20,
+    "errors": 0,
+    "avg_ms": 7.06,
+    "p95_ms": 35.59,
+    "p99_ms": 35.59,
+    "throughput_qps": 141.5,
+    "error_rate_pct": 0.0
+  },
+  {
+    "n_clients": 5,
+    "total_queries": 100,
+    "errors": 0,
+    "avg_ms": 14.85,
+    "p95_ms": 22.39,
+    "p99_ms": 26.29,
+    "throughput_qps": 313.2,
+    "error_rate_pct": 0.0
+  },
+  {
+    "n_clients": 10,
+    "total_queries": 200,
+    "errors": 0,
+    "avg_ms": 31.6,
+    "p95_ms": 55.21,
+    "p99_ms": 65.15,
+    "throughput_qps": 305.0,
+    "error_rate_pct": 0.0
+  },
+  {
+    "n_clients": 20,
+    "total_queries": 400,
+    "errors": 0,
+    "avg_ms": 65.0,
+    "p95_ms": 215.49,
+    "p99_ms": 267.23,
+    "throughput_qps": 292.5,
+    "error_rate_pct": 0.0
+  },
+  {
+    "n_clients": 50,
+    "total_queries": 1000,
+    "errors": 0,
+    "avg_ms": 152.91,
+    "p95_ms": 355.26,
+    "p99_ms": 449.34,
+    "throughput_qps": 299.2,
+    "error_rate_pct": 0.0
+  }
+]
