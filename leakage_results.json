@@ -1,0 +1,41 @@
+{
+  "TEE_mode_admin": {
+    "pattern_counts": {
+      "[('ma_benh', 'DTE001')]": 3,
+      "[('ma_benh', 'DTE002')]": 2,
+      "[('ma_benh', 'DTE003')]": 1,
+      "[('ma_benh', 'DTE004')]": 1,
+      "[]": 2
+    },
+    "entropy": 2.1972,
+    "max_entropy": 2.3219,
+    "leakage_score": 0.0537,
+    "interpretation": "LOW leakage"
+  },
+  "SOFTWARE_mode_admin": {
+    "pattern_counts": {
+      "[('ma_benh', 'DTE001')]": 3,
+      "[('ma_benh', 'DTE002')]": 2,
+      "[('ma_benh', 'DTE003')]": 1,
+      "[('ma_benh', 'DTE004')]": 1,
+      "[]": 2
+    },
+    "entropy": 2.1972,
+    "max_entropy": 2.3219,
+    "leakage_score": 0.0537,
+    "interpretation": "LOW leakage"
+  },
+  "TEE_mode_researcher_masked": {
+    "pattern_counts": {
+      "[('ma_benh', 'DTE001')]": 3,
+      "[('ma_benh', 'DTE002')]": 2,
+      "[('ma_benh', 'DTE003')]": 1,
+      "[('ma_benh', 'DTE004')]": 1,
+      "[]": 2
+    },
+    "entropy": 2.1972,
+    "max_entropy": 2.3219,
+    "leakage_score": 0.0537,
+    "interpretation": "LOW leakage"
+  }
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "label": "SOFTWARE-only: count",
+    "query_type": "count",
+    "runs": 50,
+    "avg_ms": 5.73,
+    "p95_ms": 6.168,
+    "p99_ms": 35.886,
+    "qps": 174.5
+  },
+  {
+    "label": "TEE-only: sum_vien_phi (all records)",
+    "query_type": "sum_vien_phi",
+    "runs": 50,
+    "avg_ms": 10.578,
+    "p95_ms": 11.58,
+    "p99_ms": 17.167,
+    "qps": 94.5
+  },
+  {
+    "label": "TEE-only: avg_vien_phi (all records)",
+    "query_type": "avg_vien_phi",
+    "runs": 50,
+    "avg_ms": 10.975,
+    "p95_ms": 12.048,
+    "p99_ms": 13.443,
+    "qps": 91.1
+  },
+  {
+    "label": "Hybrid Adaptive: avg_vien_phi (filtered DTE001)",
+    "query_type": "avg_vien_phi",
+    "runs": 50,
+    "avg_ms": 10.925,
+    "p95_ms": 13.4,
+    "p99_ms": 15.656,
+    "qps": 91.5
+  },
+  {
+    "label": "Hybrid + RBAC masking: avg (researcher)",
+    "query_type": "avg_vien_phi",
+    "runs": 50,
+    "avg_ms": 11.817,
+    "p95_ms": 15.086,
+    "p99_ms": 53.462,
+    "qps": 84.6
+  }
+]
