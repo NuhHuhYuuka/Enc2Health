@@ -1,0 +1,12 @@
+cryptography
+pymongo
+pyope
+faker
+hvac
+fastapi
+uvicorn[standard]
+prometheus-client
+httpx
+python-dotenv
+pydantic
+pytest

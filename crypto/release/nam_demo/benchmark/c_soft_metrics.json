@@ -1,0 +1,126 @@
+{
+  "generated_at": "2026-05-17T06:27:13Z",
+  "machine": "Ubuntu 24.04 / RTX 3060 host",
+  "results": [
+    {
+      "operation": "ECC P-384 Encrypt (ECIES)",
+      "iterations": 200,
+      "avg_us": 716.51,
+      "med_us": 695.23,
+      "p95_us": 869.04,
+      "p99_us": 1138.47,
+      "max_us": 1243.0,
+      "throughput_per_sec": 1396.0
+    },
+    {
+      "operation": "ECC P-384 Decrypt (ECIES)",
+      "iterations": 200,
+      "avg_us": 769.59,
+      "med_us": 735.0,
+      "p95_us": 953.8,
+      "p99_us": 1156.35,
+      "max_us": 1430.24,
+      "throughput_per_sec": 1299.0
+    },
+    {
+      "operation": "RSA-4096 Encrypt (OAEP)",
+      "iterations": 50,
+      "avg_us": 84.76,
+      "med_us": 80.29,
+      "p95_us": 110.95,
+      "p99_us": 128.15,
+      "max_us": 128.15,
+      "throughput_per_sec": 11799.0
+    },
+    {
+      "operation": "RSA-4096 Decrypt (OAEP)",
+      "iterations": 50,
+      "avg_us": 221571.73,
+      "med_us": 220569.48,
+      "p95_us": 229758.42,
+      "p99_us": 234606.91,
+      "max_us": 234606.91,
+      "throughput_per_sec": 5.0
+    },
+    {
+      "operation": "AES-SIV Encrypt (DTE)",
+      "iterations": 1000,
+      "avg_us": 1.99,
+      "med_us": 2.14,
+      "p95_us": 2.36,
+      "p99_us": 2.76,
+      "max_us": 22.26,
+      "throughput_per_sec": 501720.0
+    },
+    {
+      "operation": "AES-SIV Decrypt (DTE)",
+      "iterations": 1000,
+      "avg_us": 1.72,
+      "med_us": 1.69,
+      "p95_us": 1.71,
+      "p99_us": 2.12,
+      "max_us": 13.45,
+      "throughput_per_sec": 582323.0
+    },
+    {
+      "operation": "OPE Encrypt (age)",
+      "iterations": 1000,
+      "avg_us": 549.58,
+      "med_us": 501.71,
+      "p95_us": 710.66,
+      "p99_us": 743.32,
+      "max_us": 784.79,
+      "throughput_per_sec": 1820.0
+    },
+    {
+      "operation": "OPE Decrypt (age)",
+      "iterations": 1000,
+      "avg_us": 527.41,
+      "med_us": 495.46,
+      "p95_us": 685.39,
+      "p99_us": 724.67,
+      "max_us": 743.16,
+      "throughput_per_sec": 1896.0
+    },
+    {
+      "operation": "AES-GCM-256 Encrypt (lab)",
+      "iterations": 1000,
+      "avg_us": 4.02,
+      "med_us": 3.94,
+      "p95_us": 4.16,
+      "p99_us": 5.49,
+      "max_us": 13.43,
+      "throughput_per_sec": 248516.0
+    },
+    {
+      "operation": "AES-GCM-256 Decrypt (lab)",
+      "iterations": 1000,
+      "avg_us": 1.5,
+      "med_us": 1.31,
+      "p95_us": 2.02,
+      "p99_us": 2.13,
+      "max_us": 19.62,
+      "throughput_per_sec": 667446.0
+    },
+    {
+      "operation": "KMS API GET /dek/gcm_dek",
+      "iterations": 100,
+      "avg_us": 27762.69,
+      "med_us": 25401.03,
+      "p95_us": 42875.76,
+      "p99_us": 50917.44,
+      "max_us": 50917.44,
+      "throughput_per_sec": 36.0
+    },
+    {
+      "operation": "KMS API GET /pubkey/Noi",
+      "iterations": 100,
+      "avg_us": 21080.41,
+      "med_us": 19810.74,
+      "p95_us": 29695.63,
+      "p99_us": 32845.15,
+      "max_us": 32845.15,
+      "throughput_per_sec": 47.0
+    }
+  ]
+}
