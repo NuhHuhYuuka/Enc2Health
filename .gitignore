@@ -1,3 +1,16 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
+
+# ── Toàn bộ folder enclave (Lan gửi code qua Google Drive, không push GitHub) ──
+enclave/
+
+# ── Dữ liệu sinh ra / dump & bundle lớn (sinh lại bằng generate_ehr.py) ──
+*.archive
+*.zip
+
+# ── File nhị phân / metadata không cần version ──
+*.docx
+*:Zone.Identifier
+*.pid
