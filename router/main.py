@@ -1,5 +1,7 @@
 # Main Router Service - tích hợp T1, T2, T4, T9
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+import os
+from common.auth import validate_jwt_bearer
 from pydantic import BaseModel
 from typing import Dict
 import time
@@ -24,11 +26,29 @@ class QueryRequest(BaseModel):
     role: str = "doctor"
 
 @app.post("/query")
-async def handle_query(req: QueryRequest):
+async def handle_query(req: QueryRequest, request: Request):
     t0 = time.perf_counter()
+    # Prefer Authorization: Bearer <JWT> if provided
+    auth_hdr = request.headers.get("authorization")
+    if auth_hdr:
+        claims = validate_jwt_bearer(auth_hdr)
+        role = claims.get("role", "doctor")
+    else:
+        # Enforce internal auth token if configured as fallback
+        expected_token = os.environ.get("INTERNAL_AUTH_TOKEN")
+        provided = request.headers.get("x-internal-auth")
 
-    # T4 - RBAC check
-    access = rbac.check(req.role, req.query_type)
+        if expected_token:
+            if provided != expected_token:
+                raise HTTPException(status_code=401, detail="missing or invalid internal auth")
+            # Derive role from an internal header (only trusted when internal token present)
+            role = request.headers.get("x-internal-role", "doctor")
+        else:
+            # Legacy behavior: fall back to client-supplied role (not recommended)
+            role = req.role
+
+    # T4 - RBAC check (use derived role)
+    access = rbac.check(role, req.query_type)
     if not access.allowed:
         raise HTTPException(status_code=403, detail=access.reason)
 
@@ -43,7 +63,7 @@ async def handle_query(req: QueryRequest):
 
     # T9 - Execute
     if actual_mode == ExecutionMode.TEE:
-        result = ecall.query(req.query_type, req.filters, req.role)
+        result = ecall.query(req.query_type, req.filters, role)
         if result is None:
             raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
     else:
@@ -51,7 +71,7 @@ async def handle_query(req: QueryRequest):
 
     # Mask nếu cần
     if isinstance(result, dict):
-        result = rbac.mask_result(result, req.role)
+        result = rbac.mask_result(result, role)
 
     elapsed = round((time.perf_counter() - t0) * 1000, 3)
     return {

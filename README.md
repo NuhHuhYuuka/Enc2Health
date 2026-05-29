@@ -191,6 +191,27 @@ python3 tests/test_adaptive.py
 python3 tests/plot_results.py
 ```
 
+### Scale knobs cho benchmark TEE/Hybrid
+
+```bash
+# Tăng kích thước dữ liệu EHR cho mô phỏng nặng hơn
+export EHR_RECORD_COUNT=500000
+
+# Ép ECALL pool giữ nhiều record hơn và tạo áp lực bộ nhớ
+export T8_POOL_RECORDS=500000
+export T8_POOL_PAYLOAD_BYTES=256
+
+# Tăng scale cho các benchmark enclave nội bộ
+export T11_DATASET_SIZE=500000
+export T11_PAYLOAD_BYTES=4096
+export T12_TARGET_PATIENTS=500000
+
+# Tạo dữ liệu lại để MongoDB có index đúng trên tập lớn
+python3 crypto/data/generate_ehr.py
+```
+
+Các cột mã hóa dùng cho lọc equality/range đã được tạo index trong script sinh dữ liệu; khi chạy benchmark bạn nên kiểm tra log `Verified indexes` để chắc chắn MongoDB không rơi vào collscan.
+
 ---
 
 ## Cấu trúc project

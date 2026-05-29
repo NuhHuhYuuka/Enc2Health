@@ -1,39 +1,77 @@
 # T11 - Benchmark 3 chế độ: Software-only / TEE-only / Hybrid Adaptive
-import httpx
 import time
+import os
 import json
 import statistics
+import math
+
+try:
+    import httpx
+except ImportError:
+    raise SystemExit(
+        "Missing dependency 'httpx'.\n"
+        "Install quickly with: python3 -m pip install --user httpx\n"
+        "Or create a virtualenv and install all requirements:\n"
+        "  python3 -m venv .venv\n"
+        "  source .venv/bin/activate\n"
+        "  pip install -r requirements.txt\n"
+        "(This repository includes crypto/requirements.txt.)"
+    )
 
 ROUTER_URL = "http://localhost:8000"
 RUNS = 50  # số lần lặp mỗi query
 
-def run_query(query_type: str, role: str, filters: dict = {}) -> float:
+def run_query(client: httpx.Client, query_type: str, role: str, filters: dict = {}) -> float:
     """Chạy 1 query, trả về latency ms."""
     t0 = time.perf_counter()
-    r = httpx.post(f"{ROUTER_URL}/query", json={
+    headers = {}
+    token = os.environ.get("INTERNAL_AUTH_TOKEN")
+    if token:
+        headers["X-Internal-Auth"] = token
+        headers["X-Internal-Role"] = role
+    r = client.post(f"{ROUTER_URL}/query", json={
         "query_type": query_type,
         "filters": filters,
         "role": role
-    })
+    }, headers=headers)
     elapsed = (time.perf_counter() - t0) * 1000
     if r.status_code != 200:
         return -1.0
     return elapsed
 
 def benchmark(label: str, query_type: str, role: str, filters: dict = {}):
-    """Chạy RUNS lần, tính avg/p95/p99."""
+    """Chạy RUNS lần, tính avg/p95/p99.
+
+    Cải tiến: thêm warmup (giảm ảnh hưởng thiết lập kết nối), reuse
+    httpx.Client, và tính quantile/QPS chính xác hơn.
+    """
     print(f"\n[Benchmark] {label} ...")
+    WARMUP = min(5, RUNS // 5)
     latencies = []
-    for _ in range(RUNS):
-        ms = run_query(query_type, role, filters)
-        if ms > 0:
-            latencies.append(ms)
+    with httpx.Client() as client:
+        # warmup
+        for _ in range(WARMUP):
+            try:
+                _ = run_query(client, query_type, role, filters)
+            except Exception:
+                pass
+
+        for _ in range(RUNS):
+            ms = run_query(client, query_type, role, filters)
+            if ms > 0:
+                latencies.append(ms)
+
+    if not latencies:
+        raise RuntimeError("No successful runs recorded")
 
     latencies.sort()
+    n = len(latencies)
     avg = statistics.mean(latencies)
-    p95 = latencies[int(len(latencies) * 0.95)]
-    p99 = latencies[int(len(latencies) * 0.99)]
-    qps = 1000 / avg
+    # use ceil-based indexing so p95 truly >= 95% of samples
+    p95 = latencies[min(n - 1, math.ceil(n * 0.95) - 1)]
+    p99 = latencies[min(n - 1, math.ceil(n * 0.99) - 1)]
+    total_ms = sum(latencies)
+    qps = (n / (total_ms / 1000.0)) if total_ms > 0 else 0
 
     result = {
         "label": label,

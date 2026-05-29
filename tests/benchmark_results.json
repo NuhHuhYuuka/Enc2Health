@@ -3,45 +3,45 @@
     "label": "SOFTWARE-only: count",
     "query_type": "count",
     "runs": 50,
-    "avg_ms": 0.677,
-    "p95_ms": 0.808,
-    "p99_ms": 0.848,
-    "qps": 1477.1
+    "avg_ms": 0.629,
+    "p95_ms": 0.72,
+    "p99_ms": 0.792,
+    "qps": 1590.6
   },
   {
     "label": "TEE-only: sum_vien_phi (all records)",
     "query_type": "sum_vien_phi",
     "runs": 50,
-    "avg_ms": 15.875,
-    "p95_ms": 22.281,
-    "p99_ms": 24.108,
-    "qps": 63.0
+    "avg_ms": 21.261,
+    "p95_ms": 28.577,
+    "p99_ms": 29.859,
+    "qps": 47.0
   },
   {
     "label": "TEE-only: avg_vien_phi (all records)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 15.728,
-    "p95_ms": 23.272,
-    "p99_ms": 27.85,
-    "qps": 63.6
+    "avg_ms": 21.382,
+    "p95_ms": 28.414,
+    "p99_ms": 29.261,
+    "qps": 46.8
   },
   {
     "label": "Hybrid Adaptive: avg_vien_phi (filtered DTE001)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 15.832,
-    "p95_ms": 22.241,
-    "p99_ms": 24.135,
-    "qps": 63.2
+    "avg_ms": 18.278,
+    "p95_ms": 25.792,
+    "p99_ms": 26.449,
+    "qps": 54.7
   },
   {
     "label": "Hybrid + RBAC masking: avg (researcher)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 16.105,
-    "p95_ms": 22.787,
-    "p99_ms": 23.959,
-    "qps": 62.1
+    "avg_ms": 21.288,
+    "p95_ms": 29.627,
+    "p99_ms": 30.538,
+    "qps": 47.0
   }
 ]

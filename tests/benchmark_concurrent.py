@@ -1,7 +1,9 @@
 # T12 - Benchmark concurrent clients 1→5→10→20→50
 import httpx
+import os
 import threading
 import time
+import math
 import json
 import statistics
 
@@ -11,21 +13,29 @@ QUERIES_PER_CLIENT = 20
 def client_worker(client_id: int, results: list, query_type: str, role: str):
     latencies = []
     errors = 0
-    for _ in range(QUERIES_PER_CLIENT):
-        try:
-            t0 = time.perf_counter()
-            r = httpx.post(f"{ROUTER_URL}/query", json={
-                "query_type": query_type,
-                "filters": {},
-                "role": role
-            }, timeout=30)
-            elapsed = (time.perf_counter() - t0) * 1000
-            if r.status_code == 200:
-                latencies.append(elapsed)
-            else:
+    # reuse a client for this thread to avoid per-request connection/setup overhead
+    with httpx.Client(timeout=30) as client:
+        for _ in range(QUERIES_PER_CLIENT):
+            try:
+                t0 = time.perf_counter()
+                headers = {}
+                token = os.environ.get("INTERNAL_AUTH_TOKEN")
+                if token:
+                    headers["X-Internal-Auth"] = token
+                    headers["X-Internal-Role"] = role
+
+                r = client.post(f"{ROUTER_URL}/query", json={
+                    "query_type": query_type,
+                    "filters": {},
+                    "role": role
+                }, headers=headers)
+                elapsed = (time.perf_counter() - t0) * 1000
+                if r.status_code == 200:
+                    latencies.append(elapsed)
+                else:
+                    errors += 1
+            except Exception:
                 errors += 1
-        except Exception:
-            errors += 1
     results.append({"client_id": client_id, "latencies": latencies, "errors": errors})
 
 def run_concurrent(n_clients: int, query_type: str, role: str) -> dict:
@@ -52,15 +62,23 @@ def run_concurrent(n_clients: int, query_type: str, role: str) -> dict:
 
     all_latencies.sort()
     n = len(all_latencies)
+    attempts = n + total_errors
+    avg_ms = round(statistics.mean(all_latencies), 2) if n > 0 else 0
+    # use ceil-based quantile indexing
+    p95_ms = round(all_latencies[min(n - 1, math.ceil(n * 0.95) - 1)], 2) if n > 0 else 0
+    p99_ms = round(all_latencies[min(n - 1, math.ceil(n * 0.99) - 1)], 2) if n > 0 else 0
+    throughput_qps = round(attempts / total_s, 1) if total_s > 0 else 0
+
     return {
         "n_clients": n_clients,
         "total_queries": n,
+        "attempts": attempts,
         "errors": total_errors,
-        "avg_ms": round(statistics.mean(all_latencies), 2) if n > 0 else 0,
-        "p95_ms": round(all_latencies[int(n*0.95)], 2) if n > 0 else 0,
-        "p99_ms": round(all_latencies[int(n*0.99)], 2) if n > 0 else 0,
-        "throughput_qps": round(n / total_s, 1),
-        "error_rate_pct": round(total_errors / (n + total_errors) * 100, 1),
+        "avg_ms": avg_ms,
+        "p95_ms": p95_ms,
+        "p99_ms": p99_ms,
+        "throughput_qps": throughput_qps,
+        "error_rate_pct": round(total_errors / attempts * 100, 1) if attempts > 0 else 0,
     }
 
 if __name__ == "__main__":

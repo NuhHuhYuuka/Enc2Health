@@ -2,6 +2,8 @@
 # Service của Lan chạy tại http://127.0.0.1:9091
 
 import httpx
+import os
+import ssl
 import time
 from typing import Optional
 
@@ -20,8 +22,39 @@ class EcallClient:
     def health_check(self) -> bool:
         """Kiểm tra service của Lan còn sống không."""
         try:
-            r = httpx.get(f"{self.base_url}/health", timeout=5)
-            return r.status_code == 200
+            headers = {}
+            token = os.environ.get("INTERNAL_AUTH_TOKEN")
+            if token:
+                headers["X-Internal-Auth"] = token
+
+            # Use mTLS client cert when provided
+            client_cert = os.environ.get("ROUTER_CLIENT_CERT")
+            client_key = os.environ.get("ROUTER_CLIENT_KEY")
+            ca_bundle = os.environ.get("T8_SSL_CA")
+
+            verify = True
+            cert = None
+            if ca_bundle:
+                verify = ca_bundle
+            if client_cert and client_key:
+                cert = (client_cert, client_key)
+
+            with httpx.Client(verify=verify, cert=cert, timeout=5) as c:
+                # Prefer attest endpoint to verify enclave identity
+                try:
+                    r = c.get(f"{self.base_url}/attest", headers=headers)
+                    if r.status_code == 200:
+                        data = r.json()
+                        expected = os.environ.get("T8_EXPECTED_MRENCLAVE")
+                        if expected and data.get("mrenclave") != expected:
+                            print("[EcallClient] Attestation MRENCLAVE mismatch")
+                            return False
+                        return True
+                except Exception:
+                    pass
+
+                r = c.get(f"{self.base_url}/health", headers=headers)
+                return r.status_code == 200
         except Exception:
             return False
 
@@ -42,11 +75,29 @@ class EcallClient:
         }
         try:
             t0 = time.perf_counter()
-            r = httpx.post(
-                f"{self.base_url}/query",
-                json=payload,
-                timeout=TIMEOUT_S
-            )
+            headers = {}
+            token = os.environ.get("INTERNAL_AUTH_TOKEN")
+            if token:
+                headers["X-Internal-Auth"] = token
+
+            client_cert = os.environ.get("ROUTER_CLIENT_CERT")
+            client_key = os.environ.get("ROUTER_CLIENT_KEY")
+            ca_bundle = os.environ.get("T8_SSL_CA")
+
+            verify = True
+            cert = None
+            if ca_bundle:
+                verify = ca_bundle
+            if client_cert and client_key:
+                cert = (client_cert, client_key)
+
+            with httpx.Client(verify=verify, cert=cert, timeout=TIMEOUT_S) as c:
+                r = c.post(
+                    f"{self.base_url}/query",
+                    json=payload,
+                    timeout=TIMEOUT_S,
+                    headers=headers
+                )
             elapsed = (time.perf_counter() - t0) * 1000
 
             if r.status_code == 200:

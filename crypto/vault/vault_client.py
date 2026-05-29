@@ -8,11 +8,27 @@ import base64
 from functools import lru_cache
 
 VAULT_ADDR  = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
-VAULT_TOKEN = os.getenv("VAULT_TOKEN", "enc2health-root-token")
+VAULT_TOKEN = os.getenv("VAULT_TOKEN")
 
 def _client() -> hvac.Client:
-    c = hvac.Client(url=VAULT_ADDR, token=VAULT_TOKEN)
-    assert c.is_authenticated(), "Vault authentication failed!"
+    c = hvac.Client(url=VAULT_ADDR)
+    # Prefer explicit token env; otherwise attempt AppRole login
+    if VAULT_TOKEN:
+        c.token = VAULT_TOKEN
+    else:
+        role_id = os.getenv("VAULT_ROLE_ID")
+        secret_id = os.getenv("VAULT_SECRET_ID")
+        if role_id and secret_id:
+            resp = c.auth.approle.login(role_id=role_id, secret_id=secret_id)
+            token = resp.get("auth", {}).get("client_token")
+            if not token:
+                raise RuntimeError("Vault AppRole login failed (no token returned)")
+            c.token = token
+        else:
+            raise RuntimeError("No VAULT_TOKEN and no VAULT_ROLE_ID/VAULT_SECRET_ID provided")
+
+    if not c.is_authenticated():
+        raise RuntimeError("Vault authentication failed! Check VAULT_ADDR and credentials.")
     return c
 
 

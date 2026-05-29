@@ -21,7 +21,8 @@ random.seed(42)
 MONGO_URI    = "mongodb://localhost:27017"
 DB_NAME      = "enc2health"
 COLLECTION   = "patient_records"
-RECORD_COUNT = 10000
+RECORD_COUNT = int(os.getenv("EHR_RECORD_COUNT", "10000"))
+BATCH_SIZE   = int(os.getenv("EHR_BATCH_SIZE", "500"))
 
 # ICD-10 mã bệnh phổ biến
 ICD10_CODES = {
@@ -51,15 +52,12 @@ def birth_date_from_age(admission_date: date, age: int) -> date:
 def main():
     print("[1/5] Sinh keypairs cho tất cả Khoa (ECC P-384)...")
     dept_keypairs = generate_all_department_keypairs("ECC")
-    # Lưu public keys ra file để dùng lại (private keys sẽ lưu Vault ở T6)
+    # Lưu public keys ra file để dùng lại (private keys MUST be stored in Vault)
     os.makedirs("data/keys", exist_ok=True)
     for dept, kp in dept_keypairs.items():
         with open(f"data/keys/{dept}_public.pem", "w") as f:
             f.write(kp["public_pem"])
-        # ⚠️ Private key: chỉ lưu tạm, T6 sẽ chuyển vào Vault
-        with open(f"data/keys/{dept}_private.pem", "w") as f:
-            f.write(kp["private_pem"])
-    print("  Keypairs saved to data/keys/")
+    print("  Public keypairs saved to data/keys/ (private keys NOT written — store in Vault)")
 
     print("[2/5] Khởi tạo các cipher...")
     # DTE: mỗi field 1 key riêng
@@ -70,15 +68,8 @@ def main():
     # AES-GCM: DEK cho lab results & billing
     gcm = AESGCMCipher()
 
-    # Lưu keys tạm (T6 sẽ wrap vào Vault Envelope Encryption)
-    os.makedirs("data/keys", exist_ok=True)
-    dte_ma_benh.save_key("data/keys/dte_ma_benh.key")
-    dte_khoa.save_key("data/keys/dte_khoa.key")
-    ore.save_key("data/keys/ore.key")
-    with open("data/keys/gcm_dek.key", "w") as f:
-        import base64
-        f.write(base64.b64encode(gcm.key).decode())
-    print("  Cipher keys saved (tạm thời – T6 sẽ migrate vào Vault)")
+    # NOTE: Do NOT write raw cipher keys or DEKs to disk. Store them into Vault or use envelope encryption.
+    print("  Cipher keys generated in-memory. DO NOT write raw keys to disk — push to Vault instead.")
 
     print("[3/5] Kết nối MongoDB...")
     client = MongoClient(MONGO_URI)
@@ -87,7 +78,7 @@ def main():
     col.drop()  # Reset nếu chạy lại
 
     print(f"[4/5] Sinh và insert {RECORD_COUNT:,} hồ sơ...")
-    batch_size = 500
+    batch_size = BATCH_SIZE
     batch = []
 
     for i in range(RECORD_COUNT):
@@ -155,6 +146,9 @@ def main():
     col.create_index("ngay_nhap_vien_enc")
     col.create_index("dept")
     print("  Indexes created: ma_benh_enc, khoa_phong_enc, tuoi_enc, ngay_nhap_vien_enc")
+    print("  Verified indexes:")
+    for index_info in col.list_indexes():
+        print(f"    - {index_info.get('name')}")
 
     print("\n✅ Dataset generation complete!")
     print(f"   DB: {DB_NAME} | Collection: {COLLECTION}")
