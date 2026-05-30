@@ -2,7 +2,6 @@
 
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional
 
 class ExecutionMode(Enum):
     SOFTWARE = "software"
@@ -16,32 +15,56 @@ class RouteDecision:
 
 class QueryRouter:
     """
-    Phân loại SQL operator:
-    - SOFTWARE mode: =, JOIN, GROUP BY  (DTE/ORE xử lý được)
-    - TEE mode: SUM, AVG, COUNT DISTINCT (cần enclave)
+    Phân loại SQL operator (theo kịch bản Enc²Health):
+    - SOFTWARE mode (DTE/ORE xử lý trực tiếp trên ciphertext, không giải mã):
+        =, JOIN, GROUP BY, COUNT, range lọc theo vùng/tuổi
+    - TEE mode (cần giải mã trong enclave để tính toán):
+        SUM, AVG, COUNT DISTINCT
     """
 
-    TEE_OPERATORS = {"sum", "avg", "count distinct"}
-    SOFTWARE_OPERATORS = {"=", "join", "group by", "count"}
+    # Toán tử cần enclave (giải mã rồi mới tính được)
+    TEE_QUERY_TYPES = {
+        "sum_vien_phi", "avg_vien_phi",
+        "sum", "avg", "count_distinct", "count distinct",
+        "stddev", "median",
+    }
+    # Toán tử chạy được trên ciphertext bằng DTE/ORE
+    SOFTWARE_QUERY_TYPES = {
+        "count", "equality", "=", "eq",
+        "join", "group_by", "group by", "range", "filter",
+    }
 
-    def route(self, query_type: str, filters: dict = {}) -> RouteDecision:
-        q = query_type.lower().strip()
+    def _normalize(self, query_type: str) -> str:
+        return query_type.lower().strip().replace("-", "_")
 
-        if q in ("sum_vien_phi", "avg_vien_phi"):
-            return RouteDecision(
-                mode=ExecutionMode.TEE,
-                reason="Aggregation operator cần TEE enclave",
-                query_type=query_type
+    def route(self, query_type: str, filters: dict = None) -> RouteDecision:
+        q = self._normalize(query_type)
+
+        if q in self.TEE_QUERY_TYPES:
+            reason = (
+                "COUNT DISTINCT cần enclave (deduplicate trên plaintext)"
+                if q in ("count_distinct", "count distinct")
+                else "Aggregation operator cần giải mã trong TEE enclave"
             )
-        elif q == "count":
+            return RouteDecision(mode=ExecutionMode.TEE, reason=reason, query_type=query_type)
+
+        if q == "count":
             return RouteDecision(
                 mode=ExecutionMode.SOFTWARE,
-                reason="COUNT đơn giản, Software Mode đủ",
-                query_type=query_type
+                reason="COUNT đơn giản chạy trên ciphertext, Software Mode đủ",
+                query_type=query_type,
             )
-        else:
+
+        if q in self.SOFTWARE_QUERY_TYPES:
             return RouteDecision(
                 mode=ExecutionMode.SOFTWARE,
-                reason="Equality/range operator, Software Mode",
-                query_type=query_type
+                reason="Equality/range/join/group-by chạy trên DTE/ORE, Software Mode",
+                query_type=query_type,
             )
+
+        # Mặc định an toàn: toán tử lạ → Software (không đẩy dữ liệu vào enclave vô cớ)
+        return RouteDecision(
+            mode=ExecutionMode.SOFTWARE,
+            reason="Toán tử không xác định, mặc định Software Mode",
+            query_type=query_type,
+        )
