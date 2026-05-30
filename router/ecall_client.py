@@ -90,17 +90,25 @@ class EcallClient:
         self,
         query_type: str,
         filters: dict = {},
-        role: str = "doctor"
+        role: str = "doctor",
+        ciphertexts: Optional[list] = None,
     ) -> Optional[dict]:
         """
         Gửi query vào ECALL pool của Lan.
+
+        Nếu `ciphertexts` được cung cấp, Router đã gom sẵn bản mã `vien_phi_enc`
+        từ MongoDB và đẩy kèm để Enclave giải mã + tính toán (luồng TEE thật).
+        Pool hiện tại bỏ qua field thừa nên vẫn tương thích ngược.
+
         Returns: dict kết quả hoặc None nếu lỗi
         """
         payload = {
             "query_type": query_type,
             "filters": filters,
-            "role": role
+            "role": role,
         }
+        if ciphertexts is not None:
+            payload["ciphertexts"] = ciphertexts
         try:
             t0 = time.perf_counter()
             headers = {"Authorization": f"Bearer {_auth_jwt()}"}
