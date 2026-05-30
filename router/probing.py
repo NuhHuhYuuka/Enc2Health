@@ -8,6 +8,14 @@ import os
 import requests
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
+
+from router.resource_monitor import (
+    ResourceSample,
+    capture_process_sample,
+    discover_ecall_pool_pid,
+    write_metrics_snapshot,
+)
 
 ECALL_POOL_URL = os.environ.get("ECALL_POOL_URL", "http://127.0.0.1:9091")
 PROBE_INTERVAL_S = 5       # probe mỗi 5 giây
@@ -18,6 +26,12 @@ EPC_THRESHOLD_PCT = 0.80   # RSS > 80% RAM → fallback
 class ProbeResult:
     latency_ms: float
     rss_mb: float
+    rss_percent: float
+    epc_mb: float
+    epc_percent: float
+    epc_available: bool
+    resource_source: str
+    pid: Optional[int]
     saturated: bool
     timestamp: float
 
@@ -35,9 +49,11 @@ class EPCProber:
         self._probe_count = 0
         self._baseline_locked = False
         self.latest_result: Optional[ProbeResult] = None
+        self.latest_resource: Optional[ResourceSample] = None
         self._lock = threading.Lock()
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._metrics_path = os.environ.get("EPC_METRICS_PATH", "/tmp/enc2health_epc_metrics.json")
 
     def _request_kwargs(self) -> dict:
         """Build request kwargs compatible with both HTTP and HTTPS+mTLS modes."""
@@ -69,6 +85,7 @@ class EPCProber:
         try:
             headers = self._auth_headers()
             kwargs = self._request_kwargs()
+            target_pid = discover_ecall_pool_pid()
 
             t0 = time.perf_counter()
             r = requests.post(
@@ -82,13 +99,8 @@ class EPCProber:
             if r.status_code != 200:
                 return None
 
-            # Lấy RSS từ stats endpoint
-            health_kwargs = dict(kwargs)
-            health_kwargs["timeout"] = 5
-            stats = requests.get(f"{self.base_url}/health", headers=headers, **health_kwargs).json()
-            rss_mb = stats.get("uptime_s", 0) * 0  # placeholder
-            # Dùng RSS_PROFILE từ c_tee_metrics để ước tính
-            rss_mb = 25.8 + (latency_ms / 1.051) * 0.5  # nội suy
+            resource = capture_process_sample(target_pid)
+            write_metrics_snapshot(resource, Path(self._metrics_path))
 
             # Set baseline lần đầu
             self._probe_count += 1
@@ -100,13 +112,23 @@ class EPCProber:
                     self._baseline_locked = True
                     print(f"[Prober] Baseline locked at {self.baseline_latency:.2f}ms")
 
-            saturated = (
-                latency_ms > self.baseline_latency * SATURATION_RATIO
-            )
+            latency_saturated = self.baseline_latency is not None and latency_ms > self.baseline_latency * SATURATION_RATIO
+            rss_saturated = resource.rss_percent >= EPC_THRESHOLD_PCT
+            epc_saturated = resource.epc_available and resource.epc_percent >= EPC_THRESHOLD_PCT
+            saturated = latency_saturated or rss_saturated or epc_saturated
+
+            with self._lock:
+                self.latest_resource = resource
 
             return ProbeResult(
                 latency_ms=latency_ms,
-                rss_mb=rss_mb,
+                rss_mb=resource.rss_mb,
+                rss_percent=resource.rss_percent,
+                epc_mb=resource.epc_mb,
+                epc_percent=resource.epc_percent,
+                epc_available=resource.epc_available,
+                resource_source=resource.source,
+                pid=resource.pid,
                 saturated=saturated,
                 timestamp=time.time()
             )
@@ -115,9 +137,27 @@ class EPCProber:
             print(f"[Prober] Probe failed: {e}")
             return None
 
+    def _wait_for_service_ready(self, max_attempts: int = 30) -> bool:
+        """Đợi ECALL pool sẵn sàng trước khi bắt đầu probe định kỳ."""
+        headers = self._auth_headers()
+        kwargs = self._request_kwargs()
+        health_kwargs = dict(kwargs)
+        health_kwargs["timeout"] = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                r = requests.get(f"{self.base_url}/health", headers=headers, **health_kwargs)
+                if r.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            time.sleep(1)
+        print(f"[Prober] Service not ready after {max_attempts}s, continuing with probes")
+        return False
+
     def _run_loop(self):
         """Background loop chạy probe định kỳ."""
         print(f"[Prober] Started (interval={PROBE_INTERVAL_S}s)")
+        self._wait_for_service_ready()
         while self._running:
             result = self._probe_once()
             if result:
@@ -128,7 +168,9 @@ class EPCProber:
                     f"[Prober] {status} | "
                     f"latency={result.latency_ms:.2f}ms | "
                     f"baseline={self.baseline_latency:.2f}ms | "
-                    f"ratio={result.latency_ms/self.baseline_latency:.2f}x"
+                    f"ratio={result.latency_ms/self.baseline_latency:.2f}x | "
+                    f"rss={result.rss_mb:.2f}MB ({result.rss_percent*100:.1f}%) | "
+                    f"epc={result.epc_mb:.2f}MB ({result.epc_percent*100:.1f}%, available={result.epc_available})"
                 )
             time.sleep(PROBE_INTERVAL_S)
 
@@ -157,6 +199,7 @@ class EPCProber:
         with self._lock:
             if self.latest_result is None:
                 return {"status": "no_data", "saturated": False}
+            resource = self.latest_resource
             return {
                 "status": "saturated" if self.latest_result.saturated else "ok",
                 "saturated": self.latest_result.saturated,
@@ -165,4 +208,14 @@ class EPCProber:
                 "ratio": round(
                     self.latest_result.latency_ms / self.baseline_latency, 3
                 ) if self.baseline_latency else None,
+                "resource": {
+                    "pid": resource.pid if resource else None,
+                    "rss_mb": resource.rss_mb if resource else None,
+                    "rss_percent": resource.rss_percent if resource else None,
+                    "epc_mb": resource.epc_mb if resource else None,
+                    "epc_percent": resource.epc_percent if resource else None,
+                    "epc_available": resource.epc_available if resource else None,
+                    "source": resource.source if resource else None,
+                },
+                "metrics_path": self._metrics_path,
             }

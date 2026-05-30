@@ -89,3 +89,9 @@ async def health():
 @app.get("/adaptive")
 async def adaptive_status():
     return adaptive.get_status()
+
+
+@app.get("/metrics")
+async def metrics():
+    """Return current real-time resource snapshot for adaptive routing."""
+    return adaptive.get_status()

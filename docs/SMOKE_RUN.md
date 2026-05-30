@@ -44,15 +44,26 @@ curl -v -X POST http://127.0.0.1:8000/query \
   -d '{"query_type":"sum_vien_phi","filters":{}}'
 ```
 
+5. Kiểm tra snapshot metrics realtime (RSS/EPC, trạng thái saturated):
+```bash
+curl http://127.0.0.1:8000/metrics
+```
+Nếu endpoint trả JSON có `probe.resource.rss_mb` và `probe.metrics_path`, nghĩa là đường đo resource monitor đã chạy.
+
 Nếu Router forward thành công sang ECALL pool và pool trả kết quả, flow mTLS + TEE path được xác thực.
 
 Những điều script `scripts/smoke_test_local.sh` đã làm tự động
 - Tạo `./certs` (CA + server + client) nếu chưa có, hoặc regen khi `REGEN_CERTS=1`.
 - Sinh server cert kèm file cấu hình ext (`server_ext.cnf`) chứa SAN: `localhost`, `ecall-pool`, `127.0.0.1`.
 - Tạo virtualenv `./.venv` và cài `crypto/requirements.txt` vào đó.
+- Chọn chế độ dữ liệu cho ECALL pool bằng `T8_POOL_DATA_MODE`:
+  - `mongo`: bắt buộc đọc dữ liệu thật từ MongoDB, fail-fast nếu không kết nối được.
+  - `mock`: chỉ dùng cho local cô lập, script sẽ in cảnh báo compliance.
+  - `auto`: ưu tiên Mongo nếu có, không có thì dùng mock.
 - Nếu có `mongod` cục bộ thì seed dữ liệu; nếu không, ECALL pool chạy ở chế độ mock-data (DuckDB simulation).
 - Khởi ECALL pool với biến môi trường TLS (`T8_SSL_CERT`, `T8_SSL_KEY`, `T8_SSL_CA`) để uvicorn chạy https.
 - Khởi Router (uvicorn) và thiết lập env `ROUTER_CLIENT_CERT`, `ROUTER_CLIENT_KEY`, `T8_SSL_CA` để Router gọi ECALL pool qua mTLS.
+- Router expose thêm `GET /metrics` để trả snapshot thời gian thực gồm RSS/EPC, trạng thái saturated và đường dẫn metrics file (`/tmp/enc2health_epc_metrics.json` mặc định).
 
 Ghi chú về lỗi thường gặp
 - Lỗi `certificate subject name '...' does not match target host name '127.0.0.1'`: do server cert thiếu SAN IP. Regenerate cert (REGEN_CERTS=1) hoặc tạo SAN đúng.

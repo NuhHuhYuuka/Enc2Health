@@ -71,7 +71,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` | ✅ logic; ⚠️ probe RSS là nội suy giả |
 | Router lấy DEK từ Vault sau RA-TLS | `ecall_client.py` (`/attest` stub) + `vault_client.py` | 🚧 RA-TLS là stub `mock-sgx-quote` |
 | Đánh giá hiệu năng overhead < 2x | `tests/benchmark.py` (TEE ~2x Software) | ✅ |
-| q-leakage đo rò rỉ khi fallback | `tests/leakage.py` + `tests/attack_bipartite.py` | ⚠️ chưa phân biệt TEE vs fallback |
+| q-leakage đo rò rỉ khi fallback | `tests/leakage.py` + `tests/attack_bipartite.py` | ✅ tách được TEE/RBAC masked vs software fallback raw |
 | Grafana real-time | `enclave/monitoring/` (Prometheus + Grafana + exporter) | ✅ |
 | Tăng tốc giải mã PHI bằng AES-NI / OpenSSL | `enclave/T4/` (OpenSSL microbench AES-NI) | ✅ benchmark |
 
@@ -135,11 +135,11 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ### 4.2. 🟠 Bảo mật / Attestation
 - 🚧 **RA-TLS là stub.** `/attest` trả `mock-sgx-quote`, `mock-mrenclave`. → Cần quote thật (gramine-sgx + DCAP) hoặc ít nhất giải thích rõ "simulation" trong báo cáo.
 - ⚠️ **mTLS đã chạy pass ở local/compose smoke, nhưng chưa là mặc định cho mọi mode chạy tay.** Cần chuẩn hóa để TLS bật mặc định giữa Router ↔ Pool ↔ Vault trong profile production.
-- 🚧 **q-leakage chưa phân biệt TEE vs Fallback.** `leakage_results.json` cho 3 mode **giống hệt nhau** (0.0537) — chưa đo được *điểm cốt lõi*: fallback TEE→Software rò rỉ thêm bao nhiêu (DTE equality pattern, ORE order pattern). → Đây là phần đánh giá an ninh quan trọng nhất của đề tài, cần làm lại cho đúng.
+- ✅ **q-leakage đã phân biệt TEE vs Fallback.** `tests/leakage.py` giờ ghi riêng `TEE_mode_researcher_masked` và `SOFTWARE_fallback_researcher_raw`, nên `leakage_results.json` đã cho thấy output exposure tăng rõ khi fallback.
 
 ### 4.3. 🟡 Tính nhất quán & dữ liệu
 - 🚧 **Mã bệnh không khớp.** Crypto dùng ICD-10 (`E11`, `I10`…); enclave mock dùng `DTE001..DTE006`. → Thống nhất ICD-10 thật xuyên suốt.
-- 🚧 **Probe RSS giả.** `probing.py` nội suy `rss_mb = 25.8 + (latency/1.051)*0.5` thay vì đọc RSS thật từ `/stats`. → Đọc RSS thật (psutil) hoặc EPC paging counter từ Gramine.
+- ✅ **Probe RSS/EPC thật (best-effort).** `router/resource_monitor.py` đọc RSS thật từ `/proc/<pid>/status`, cố gắng nhận diện EPC từ `/proc/<pid>/smaps`, và `router/probing.py` đẩy snapshot ra `/metrics` / file JSON.
 - 🚧 **DBMS chưa thống nhất.** Kịch bản + README + `generate_ehr.py` = **MongoDB**; ảnh topology ghi **Postgres/CockroachDB**. → Chốt MongoDB, sửa lại ảnh topology cho khớp.
 - 🚧 **Fallback chưa dùng đúng cột ORE/DTE.** Kịch bản nói fallback chuyển sang cột ORE/DTE; hiện fallback chỉ đổi enum mode mà không có executor tương ứng.
 
@@ -163,7 +163,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 → *Định nghĩa "xong": chạy đúng truy vấn mẫu trong kịch bản — "AVG viện phí bệnh nhân E11 trên 60 tuổi" — từ client thật, qua Mongo (DTE+ORE) → Enclave (GCM+DuckDB) → ra 1 con số, CSP chỉ thấy ciphertext.*
 
 ### Sprint 2 — Đánh giá an ninh đúng trọng tâm
-5. **Làm lại q-leakage** để **phân biệt** TEE vs Software-fallback: đo access-pattern leakage (DTE equality histogram, ORE order relations) khi fallback, so với TEE (gần 0). Đây là đóng góp khoa học chính.
+5. **Q-leakage đã được tách theo mode**: đo access-pattern leakage (DTE equality histogram, ORE order relations) và output exposure riêng cho TEE masked vs Software-fallback raw. Đây là phần đánh giá an ninh chính.
 6. **Probe RSS/EPC thật** — đọc RSS qua psutil hoặc Gramine EPC counter; nối vào `epc_pressure` gauge của exporter.
 7. **Kịch bản "đợt dịch" demo** — script bơm tải → quan sát fallback tự động trên Grafana → phục hồi; lưu screenshot/log cho báo cáo.
 

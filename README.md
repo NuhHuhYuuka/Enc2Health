@@ -174,6 +174,9 @@ curl -X POST http://localhost:8000/query \
 # Kiểm tra trạng thái Adaptive Controller (EPC pressure, switch log)
 curl http://localhost:8000/adaptive
 
+# Xem snapshot metrics realtime (RSS/EPC, trạng thái saturated)
+curl http://localhost:8000/metrics
+
 # Health check (Router + ECALL pool)
 curl http://localhost:8000/health
 ```
@@ -195,7 +198,7 @@ python3 tests/benchmark.py
 # Concurrent clients benchmark — 1→5→10→20→50 clients (T12)
 python3 tests/benchmark_concurrent.py
 
-# Q-leakage entropy analysis (T13)
+# Q-leakage mode-aware analysis (T13)
 python3 tests/leakage.py
 
 # Bipartite Matching Attack — DTE frequency leakage (T13)

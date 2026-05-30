@@ -9,8 +9,11 @@
     },
     "entropy": 2.1972,
     "max_entropy": 2.3219,
-    "leakage_score": 0.0537,
-    "interpretation": "LOW leakage"
+    "pattern_leakage_score": 0.0537,
+    "output_exposure_score": 1.0,
+    "response_surface_score": 0.625,
+    "leakage_score": 1.0,
+    "interpretation": "HIGH leakage"
   },
   "SOFTWARE_mode_admin": {
     "pattern_counts": {
@@ -22,8 +25,11 @@
     },
     "entropy": 2.1972,
     "max_entropy": 2.3219,
-    "leakage_score": 0.0537,
-    "interpretation": "LOW leakage"
+    "pattern_leakage_score": 0.0537,
+    "output_exposure_score": 1.0,
+    "response_surface_score": 0.625,
+    "leakage_score": 1.0,
+    "interpretation": "HIGH leakage"
   },
   "TEE_mode_researcher_masked": {
     "pattern_counts": {
@@ -35,7 +41,26 @@
     },
     "entropy": 2.1972,
     "max_entropy": 2.3219,
-    "leakage_score": 0.0537,
-    "interpretation": "LOW leakage"
+    "pattern_leakage_score": 0.0537,
+    "output_exposure_score": 0.0,
+    "response_surface_score": 0.625,
+    "leakage_score": 0.6452,
+    "interpretation": "HIGH leakage"
+  },
+  "SOFTWARE_fallback_researcher_raw": {
+    "pattern_counts": {
+      "[('ma_benh', 'DTE001')]": 3,
+      "[('ma_benh', 'DTE002')]": 2,
+      "[('ma_benh', 'DTE003')]": 1,
+      "[('ma_benh', 'DTE004')]": 1,
+      "[]": 2
+    },
+    "entropy": 2.1972,
+    "max_entropy": 2.3219,
+    "pattern_leakage_score": 0.0537,
+    "output_exposure_score": 1.0,
+    "response_surface_score": 0.625,
+    "leakage_score": 1.0,
+    "interpretation": "HIGH leakage"
   }
 }
