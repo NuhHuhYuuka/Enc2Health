@@ -5,10 +5,15 @@
 import time
 import threading
 import os
-import requests
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
+
+try:
+    import requests
+except ImportError:
+    # requests chỉ cần khi prober gọi HTTP thật; demo/unit-test adaptive không cần.
+    requests = None
 
 from router.resource_monitor import (
     ResourceSample,
