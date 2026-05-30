@@ -1,0 +1,81 @@
+# CLAUDE.md — Hướng dẫn cho Claude Code
+
+> ⚠️ **Quy ước bắt buộc:** Mỗi khi trạng thái dự án thay đổi (hoàn thành/đổi một mục), **cập nhật SONG SONG cả [PROJECT.md](PROJECT.md) và CLAUDE.md**. PROJECT.md là tài liệu trạng thái chi tiết (DONE/IN DEV); CLAUDE.md là bản tóm tắt định hướng cho agent. Đừng để hai file lệch nhau.
+
+---
+
+## Dự án là gì
+
+**Enc²Health** — phân tích dữ liệu y tế nhạy cảm (PHI) **tự thích nghi** trên Cloud-Native DBMS, kiến trúc **D Hybrid Adaptive**: truy vấn chạy ở **Software mode** (DTE/ORE trên ciphertext MongoDB) hoặc **TEE mode** (SGX Enclave, DuckDB AVG/SUM), tự **fallback** TEE→Software khi EPC bão hòa (>80%). Mô hình đe dọa: cloud admin honest-but-curious quan sát được RAM/OS.
+
+Môn **NT219.Q2.ANTT**. 3 thành viên: Long (mã hóa & KMS), Lan (TEE/SGX & observability), Nam (Query Router & tích hợp).
+
+## Kiến trúc & services
+
+| Service | Cổng | Chủ | File chính |
+|---|---|---|---|
+| Query Router (FastAPI) | 8000 | Nam | `router/main.py` |
+| ECALL Task Pool (TEE sim) | 9091 | Lan | `enclave/enclave/ecall_pool.py` *(không trong git)* |
+| HashiCorp Vault | 8200 | Long | `crypto/vault/` |
+| KMS API | 8001 | Long | `crypto/kms_api/main.py` |
+| Prometheus / Grafana / exporter | 9090 / 3000 / 8002 | Lan | `enclave/monitoring/` *(không trong git)* |
+| MongoDB | 27017 | Long | data: `crypto/data/generate_ehr.py` |
+
+Luồng: `Client+JWT → Router (RBAC → route → cost → adaptive) → {TEE: Pool/DuckDB | SOFTWARE: MongoDB DTE/ORE} → Vault (DEK)`.
+
+## Bố cục repo (lưu ý cái gì KHÔNG trong git)
+
+```
+router/      # Nam — main, query_router, cost_model, rbac, auth, probing,
+             #       adaptive, ecall_client, software_executor, resource_monitor
+common/      # auth.py — JWT HS256 dùng chung
+crypto/      # Long — crypto/{dte,ore,gcm,asym}.py, vault/, kms_api/, data/generate_ehr.py
+tests/       # benchmark, benchmark_concurrent, leakage, attack_bipartite, test_e2e, test_router, test_adaptive
+scripts/     # smoke_test_local.sh, generate_mtls_certs.sh, generate_jwt.py
+docs/        # SMOKE_RUN.md
+enclave/     # ❌ Lan — ĐÃ gitignore (quá nặng), chia sẻ qua Google Drive. Tồn tại local nhưng KHÔNG push.
+```
+Lớn & gitignore: `enclave/`, `*.archive`, `*.zip` (dump/bundle sinh lại được).
+
+## Lệnh hay dùng
+
+```bash
+# Demo E2E có lời dẫn (cần MongoDB + data; KHÔNG cần pool) — artifact giải thích/bảo vệ
+python3 scripts/demo_e2e.py
+# Demo cơ chế tự thích nghi: đợt dịch → fallback → phục hồi (KHÔNG cần Mongo/pool)
+python3 scripts/demo_adaptive.py
+
+# Smoke E2E mTLS local (1 lệnh — khuyến nghị)
+make smoke-local
+
+# Chạy router thủ công
+AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 uvicorn router.main:app --port 8000
+
+# Tests
+python3 -m pytest tests/test_router.py tests/test_e2e.py -v   # test_e2e tự skip nếu stack chưa live
+python3 tests/benchmark.py && python3 tests/benchmark_concurrent.py
+python3 tests/leakage.py && python3 tests/attack_bipartite.py
+
+# Sinh dữ liệu EHR mã hóa vào MongoDB (cần MongoDB chạy)
+python3 crypto/data/generate_ehr.py
+```
+
+## Quy ước & cạm bẫy cần nhớ
+
+- **JWT bắt buộc:** mọi `/query` (Router lẫn Pool) cần `Authorization: Bearer <JWT>` (HS256, env `AUTH_JWT_SECRET`). Role lấy từ claim, KHÔNG tin `role` trong body.
+- **mTLS qua env:** `T8_SSL_CA`, `ROUTER_CLIENT_CERT/KEY`, `ECALL_POOL_URL=https://...`. Không set thì chạy HTTP trần.
+- **TEE ciphertext push:** `ROUTER_TEE_PUSH_CIPHERTEXT=1` để Router gom `vien_phi_enc` từ Mongo và đẩy vào Pool (mặc định tắt). `C_SOFT_METRICS_PATH` override file số liệu C_soft.
+- **Cột ciphertext MongoDB:** `ma_benh_enc` (DTE, equality), `tuoi_enc` (ORE, range `$gte/$lte`), `vien_phi_enc` (AES-GCM, giải mã để aggregate).
+- **Mã bệnh chưa thống nhất:** crypto/data dùng ICD-10 (`E11`…); một số chỗ mock dùng `DTE001..006`. `software_executor.ICD10_ALIASES` map tạm — cần thống nhất.
+- **RBAC:** admin=full · doctor=không `sum_vien_phi` (403) · researcher=bị `[MASKED]` vien_phi/ma_benh.
+- **Stack Python:** FastAPI + pymongo + cryptography + pyope + hvac + PyJWT (xem `requirements.txt`).
+- **Shell:** môi trường Windows + WSL (kali); dùng Bash tool cho script POSIX.
+
+## Trạng thái hiện tại (tóm tắt — chi tiết ở PROJECT.md)
+
+- ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), RBAC, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`)**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
+- ✅ Crypto/KMS: DTE/ORE/GCM/ECC, Vault, KMS API, generate_ehr.
+- ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
+- 🔴 **Mắt xích còn thiếu (phía Lan):** Pool nhận `ciphertexts` để giải mã AES-GCM trong enclave (hiện vẫn `MOCK_PATIENT_DATA`). RA-TLS còn stub. (Xem PROJECT.md §4, §5.5.)
+
+> Khi sửa code làm thay đổi các mục trên: nhớ cập nhật **cả PROJECT.md và CLAUDE.md**.
