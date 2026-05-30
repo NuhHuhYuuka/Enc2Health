@@ -7,6 +7,7 @@ fastapi
 uvicorn[standard]
 prometheus-client
 httpx
+requests
 python-dotenv
 pydantic
 pytest
