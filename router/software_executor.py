@@ -162,6 +162,25 @@ class SoftwareExecutor:
         query = self._build_filter(filters)
         return list(self.collection.find(query, {"vien_phi_enc": 1, "_id": 0}))
 
+    @property
+    def mongo_available(self) -> bool:
+        return self._mongo_available
+
+    def fetch_vien_phi_ciphertexts(self, filters: Dict[str, Any]) -> list[str]:
+        """Lấy danh sách ciphertext `vien_phi_enc` khớp filter (KHÔNG giải mã).
+
+        Router dùng hàm này ở TEE mode để gom bản mã rồi đẩy vào Enclave — Cloud
+        chỉ thấy ciphertext, việc giải mã + tính toán xảy ra bên trong enclave.
+        Trả về [] nếu MongoDB không khả dụng (router sẽ quay về luồng pool cũ).
+        """
+        if not self._mongo_available:
+            return []
+        try:
+            rows = self._query_mongo_records(filters)
+            return [row["vien_phi_enc"] for row in rows if row.get("vien_phi_enc")]
+        except Exception:
+            return []
+
     def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
         if not self._mongo_available:
             return self._fallback_aggregate(query_type, filters)
