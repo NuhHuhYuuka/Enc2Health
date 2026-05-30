@@ -7,7 +7,7 @@ from typing import Dict
 import time
 
 from router.query_router import QueryRouter, ExecutionMode
-from router.cost_model import compute_cost
+from router.cost_model import compare_costs
 from router.rbac import RBACMiddleware
 from router.ecall_client import EcallClient
 from router.adaptive import AdaptiveController
@@ -21,6 +21,11 @@ ecall    = EcallClient()
 adaptive = AdaptiveController()
 adaptive.start()
 software_executor = SoftwareExecutor()
+
+# Khi bật, ở TEE mode Router gom bản mã `vien_phi_enc` từ MongoDB và đẩy vào
+# Enclave để giải mã + tính toán (Cloud chỉ thấy ciphertext). Mặc định tắt để
+# tránh fetch/băng thông thừa khi pool chưa hỗ trợ nhận ciphertext.
+TEE_PUSH_CIPHERTEXT = os.environ.get("ROUTER_TEE_PUSH_CIPHERTEXT", "0") == "1"
 
 class QueryRequest(BaseModel):
     query_type: str
@@ -45,15 +50,17 @@ async def handle_query(req: QueryRequest, request: Request):
     # T1 - Route decision
     decision = router.route(req.query_type, req.filters)
 
-    # T2 - Cost estimate
-    cost = compute_cost(decision.mode, n_records=1000)
-
     # T6 - Adaptive switching
     actual_mode = adaptive.get_execution_mode(decision.mode)
 
     # T9 - Execute
+    ciphertext_count = None
     if actual_mode == ExecutionMode.TEE:
-        result = ecall.query(req.query_type, req.filters, role)
+        ciphertexts = None
+        if TEE_PUSH_CIPHERTEXT:
+            ciphertexts = software_executor.fetch_vien_phi_ciphertexts(req.filters)
+            ciphertext_count = len(ciphertexts)
+        result = ecall.query(req.query_type, req.filters, role, ciphertexts=ciphertexts)
         if result is None:
             raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
     else:
@@ -64,12 +71,16 @@ async def handle_query(req: QueryRequest, request: Request):
             "note": "SOFTWARE mode via MongoDB ciphertext",
         }
 
+    # T2 - Cost estimate dựa trên số bản ghi THẬT (so sánh C_soft vs C_TEE)
+    n_records = int(result.get("n_records", 0) or 0) if isinstance(result, dict) else 0
+    cost = compare_costs(n_records)
+
     # Mask nếu cần
     if isinstance(result, dict):
         result = rbac.mask_result(result, role)
 
     elapsed = round((time.perf_counter() - t0) * 1000, 3)
-    return {
+    response = {
         "mode": actual_mode.value,
         "requested_mode": decision.mode.value,
         "reason": decision.reason,
@@ -78,6 +89,9 @@ async def handle_query(req: QueryRequest, request: Request):
         "total_latency_ms": elapsed,
         "masked_fields": access.masked_fields,
     }
+    if ciphertext_count is not None:
+        response["ciphertext_pushed"] = ciphertext_count
+    return response
 
 @app.get("/health")
 async def health():
@@ -88,6 +102,18 @@ async def health():
 
 @app.get("/adaptive")
 async def adaptive_status():
+    return adaptive.get_status()
+
+
+@app.post("/adaptive/simulate")
+async def adaptive_simulate(pressure: float | None = None):
+    """Núm mô phỏng áp lực EPC để demo/kiểm thử adaptive fallback.
+
+    - `pressure` 0.0–1.0: ép áp lực EPC (>= 0.80 → fallback).
+    - bỏ trống / null: trở lại tín hiệu THẬT từ prober.
+    Đây là công cụ DEMO/TEST, không dùng cho production routing.
+    """
+    adaptive.set_simulated_pressure(pressure)
     return adaptive.get_status()
 
 
