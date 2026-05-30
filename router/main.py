@@ -8,7 +8,7 @@ import time
 
 from router.query_router import QueryRouter, ExecutionMode
 from router.cost_model import compare_costs
-from router.rbac import RBACMiddleware
+from router.abac import AbacPolicy, Subject
 from router.ecall_client import EcallClient
 from router.adaptive import AdaptiveController
 from router.software_executor import SoftwareExecutor
@@ -16,7 +16,7 @@ from router.software_executor import SoftwareExecutor
 app = FastAPI(title="Enc2Health Query Router", version="1.0.0")
 
 router   = QueryRouter()
-rbac     = RBACMiddleware()
+abac     = AbacPolicy()
 ecall    = EcallClient()
 adaptive = AdaptiveController()
 adaptive.start()
@@ -41,14 +41,18 @@ async def handle_query(req: QueryRequest, request: Request):
         raise HTTPException(status_code=401, detail="missing Authorization header")
     claims = validate_jwt_bearer(auth_hdr)
     role = claims.get("role", "doctor")
+    subject = Subject(role=role, dept=claims.get("dept"))
 
-    # T4 - RBAC check (use derived role)
-    access = rbac.check(role, req.query_type)
+    # T4 - ABAC check (role + thuộc tính khoa)
+    access = abac.evaluate(subject, req.query_type)
     if not access.allowed:
         raise HTTPException(status_code=403, detail=access.reason)
 
+    # ABAC dept-scoping: tiêm filter bắt buộc, client KHÔNG thể nới rộng (scope thắng).
+    eff_filters = {**req.filters, **access.scope_filters}
+
     # T1 - Route decision
-    decision = router.route(req.query_type, req.filters)
+    decision = router.route(req.query_type, eff_filters)
 
     # T6 - Adaptive switching
     actual_mode = adaptive.get_execution_mode(decision.mode)
@@ -58,13 +62,13 @@ async def handle_query(req: QueryRequest, request: Request):
     if actual_mode == ExecutionMode.TEE:
         ciphertexts = None
         if TEE_PUSH_CIPHERTEXT:
-            ciphertexts = software_executor.fetch_vien_phi_ciphertexts(req.filters)
+            ciphertexts = software_executor.fetch_vien_phi_ciphertexts(eff_filters)
             ciphertext_count = len(ciphertexts)
-        result = ecall.query(req.query_type, req.filters, role, ciphertexts=ciphertexts)
+        result = ecall.query(req.query_type, eff_filters, role, ciphertexts=ciphertexts)
         if result is None:
             raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
     else:
-        software_result = software_executor.query(req.query_type, req.filters)
+        software_result = software_executor.query(req.query_type, eff_filters)
         result = {
             "result": software_result.result,
             "n_records": software_result.n_records,
@@ -77,7 +81,7 @@ async def handle_query(req: QueryRequest, request: Request):
 
     # Mask nếu cần
     if isinstance(result, dict):
-        result = rbac.mask_result(result, role)
+        result = abac.mask_result(result, role)
 
     elapsed = round((time.perf_counter() - t0) * 1000, 3)
     response = {
@@ -88,6 +92,7 @@ async def handle_query(req: QueryRequest, request: Request):
         "result": result,
         "total_latency_ms": elapsed,
         "masked_fields": access.masked_fields,
+        "abac_scope": access.scope_filters,   # khoa bị giới hạn (nếu có)
     }
     if ciphertext_count is not None:
         response["ciphertext_pushed"] = ciphertext_count

@@ -151,3 +151,58 @@ def test_adaptive_fallback_then_restore_cycle():
     assert c.mode.value == "normal"
     # 1 lần FALLBACK + 1 lần RESTORE
     assert c.get_status()["switch_count"] == 2
+
+# ── ABAC: kiểm soát truy cập theo thuộc tính (dept-scoping) ──────
+
+def _abac():
+    from router.abac import AbacPolicy, Subject
+    return AbacPolicy(), Subject
+
+def test_abac_doctor_scoped_to_own_dept():
+    policy, Subject = _abac()
+    d = policy.evaluate(Subject(role="doctor", dept="Tim_mach"), "count")
+    assert d.allowed is True
+    assert d.scope_filters == {"khoa_phong": "Tim_mach"}
+
+def test_abac_admin_not_dept_scoped():
+    policy, Subject = _abac()
+    d = policy.evaluate(Subject(role="admin", dept="Tim_mach"), "count")
+    assert d.allowed is True
+    assert d.scope_filters == {}          # admin xem toàn viện, không bị giới hạn khoa
+
+def test_abac_doctor_without_dept_no_scope_by_default():
+    policy, Subject = _abac()
+    d = policy.evaluate(Subject(role="doctor", dept=None), "count")
+    assert d.allowed is True              # tương thích ngược (non-strict)
+    assert d.scope_filters == {}
+
+def test_abac_admin_staff_masks_diagnosis_not_billing():
+    policy, Subject = _abac()
+    d = policy.evaluate(Subject(role="admin_staff"), "avg_vien_phi")
+    assert d.allowed is True
+    assert "ma_benh" in d.masked_fields   # không xem chẩn đoán
+    assert "vien_phi" not in d.masked_fields  # vẫn xem viện phí
+
+def test_abac_doctor_sum_denied_by_rbac_layer():
+    policy, Subject = _abac()
+    d = policy.evaluate(Subject(role="doctor", dept="Noi"), "sum_vien_phi")
+    assert d.allowed is False             # tầng RBAC vẫn chặn doctor chạy SUM
+
+def test_abac_strict_mode_requires_dept(monkeypatch):
+    import router.abac as A
+    monkeypatch.setattr(A, "ABAC_REQUIRE_DEPT", True)
+    d = A.AbacPolicy().evaluate(A.Subject(role="doctor", dept=None), "count")
+    assert d.allowed is False
+
+def test_build_filter_includes_khoa_phong_ciphertext():
+    from router.software_executor import SoftwareExecutor
+    from crypto.crypto.dte import DTECipher
+    key = Path(__file__).resolve().parents[1] / "crypto" / "data" / "keys" / "dte_khoa.key"
+    ex = SoftwareExecutor.__new__(SoftwareExecutor)   # không mở kết nối Mongo
+    ex._dte_ma_benh = None
+    ex._ore = None
+    ex._dte_khoa = DTECipher.load_key(str(key))
+    q = ex._build_filter({"khoa_phong": "Tim_mach"})
+    assert "khoa_phong_enc" in q
+    # DTE tất định: cùng khoa → cùng ciphertext
+    assert q["khoa_phong_enc"] == ex._build_filter({"khoa_phong": "Tim_mach"})["khoa_phong_enc"]

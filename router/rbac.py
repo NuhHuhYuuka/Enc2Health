@@ -17,6 +17,12 @@ ROLE_PERMISSIONS = {
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,
     },
+    # Nhân viên hành chính: chỉ xử lý viện phí, KHÔNG xem chẩn đoán y khoa (kịch bản §3).
+    "admin_staff": {
+        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count"},
+        "can_see_vien_phi": True,
+        "can_see_ma_benh": False,    # ẩn mã bệnh / chẩn đoán
+    },
     "researcher": {
         "allowed_query_types": {"avg_vien_phi", "count"},
         "can_see_vien_phi": False,   # chỉ thấy kết quả aggregate, không thấy raw

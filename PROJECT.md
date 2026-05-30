@@ -65,7 +65,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Range (tuổi, ngày) — ORE/OPE | `crypto/crypto/ore.py` (Boldyreva OPE qua `pyope`) | ✅ |
 | Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ |
 | KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault transit rotation có) |
-| RBAC/ABAC qua JWT (doctor/admin/researcher) | `router/rbac.py` + `common/auth.py` | ✅ |
+| RBAC/ABAC qua JWT, chính sách theo thuộc tính y tế | `router/rbac.py` + `router/abac.py` + `common/auth.py` | ✅ RBAC role + ABAC dept-scoping (bác sĩ chỉ xem khoa mình) |
 | Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
 | TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` (mock) + `enclave_service.py` (DuckDB real) | ⚠️ Router-side xong; Pool cần nhận `ciphertexts` (Lan) |
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` + `router/resource_monitor.py` | ✅ logic + đọc RSS/EPC thật từ `/proc` |
@@ -93,7 +93,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ### 3.2. Query Router & Adaptive — Nam (`router/`, `common/`)
 - ✅ **QueryRouter (T1)** — `router/query_router.py`: phân loại `sum/avg/count_distinct → TEE`; `count/=/join/group_by/range → SOFTWARE` (đủ operator theo kịch bản).
 - ✅ **Cost Model (T2)** — `router/cost_model.py`: TEE nội suy từ RSS profile thật của Lan; **C_soft đọc số liệu thật từ `crypto/benchmark/c_soft_metrics.json`** (Long); `compare_costs(n)` so sánh 2 mode + `cheaper_mode`. `main.py` dùng **n_records thật** (bỏ hard-code 1000).
-- ✅ **RBAC/ABAC (T4)** — `router/rbac.py`: 3 role, column-level masking (`vien_phi`, `ma_benh`), `mask_result`.
+- ✅ **RBAC/ABAC (T4)** — `router/rbac.py` + `router/abac.py`: 4 role (admin/doctor/admin_staff/researcher), column-level masking (`vien_phi`, `ma_benh`), **ABAC dept-scoping** — bác sĩ chỉ xem bệnh nhân khoa mình (thuộc tính `dept` trong JWT → Router tiêm filter `khoa_phong_enc` DTE, client không nới rộng được). Demo: `scripts/demo_abac.py`.
 - ✅ **Auth JWT** — `common/auth.py` + `router/auth.py`: HS256 Bearer, iss/aud, `generate_test_jwt`; fallback `INTERNAL_AUTH_TOKEN`.
 - ✅ **Probing (T5)** — `router/probing.py`: thread probe mỗi 5s, lock baseline sau 3 lần, phát hiện latency ≥ 2× baseline.
 - ✅ **Adaptive Controller (T6)** — `router/adaptive.py`: state machine NORMAL ⇄ FALLBACK với **hysteresis** (fallback ≥80%, restore ≤60% chống flapping), núm mô phỏng áp lực (`set_simulated_pressure` + `/adaptive/simulate`), switch log có pressure/nguồn, endpoint `/adaptive`.
@@ -104,6 +104,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Smoke run mTLS local** — `Makefile` (`make smoke-local`), `scripts/smoke_test_local.sh`, `scripts/generate_jwt.py`, `docs/SMOKE_RUN.md`: chạy 1 lệnh dựng cả Pool+Router qua TLS, smoke pass.
 - ✅ **Demo E2E có lời dẫn** — `scripts/demo_e2e.py`: chạy truy vấn "AVG viện phí E11 trên 60 tuổi" trên 10k record mã hóa thật, in từng bước (CSP thấy ciphertext → enclave giải mã → bác sĩ nhận 1 số → researcher bị mask). Dùng làm artifact giải thích + bảo vệ đồ án.
 - ✅ **Demo Adaptive có lời dẫn** — `scripts/demo_adaptive.py`: mô phỏng đợt dịch → EPC bão hòa → router tự fallback AVG xuống Software → phục hồi (có hysteresis + switch log). Không cần MongoDB/Pool.
+- ✅ **Demo ABAC có lời dẫn** — `scripts/demo_abac.py`: chứng minh dept-scoping trên data thật (bác sĩ Tim_mach chỉ thấy 1700 BN khoa mình vs admin 10000; chống lách filter; admin_staff che chẩn đoán; researcher mask).
 
 ### 3.3. TEE Enclave & Observability — Lan (`enclave/`)
 > ⚠️ Folder `enclave/` đã được gỡ khỏi git (quá nặng) và `.gitignore`; Lan chia sẻ qua Google Drive. Các đường dẫn dưới đây trỏ tới cây thư mục local của Lan, không có trên GitHub.

@@ -53,6 +53,7 @@ class SoftwareExecutor:
         )
         self.collection = self.client[DEFAULT_DB_NAME][DEFAULT_COLLECTION]
         self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key")
+        self._dte_khoa = self._load_dte_cipher("dte_khoa.key")
         self._gcm = self._load_gcm_cipher("gcm_dek.key")
         self._ore = self._load_ore_cipher("ore.key")
         self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
@@ -86,6 +87,13 @@ class SoftwareExecutor:
                 b"field:ma_benh",
             )
 
+        # ABAC dept-scoping: lọc theo khoa trên cột DTE (CSP chỉ thấy ciphertext).
+        if "khoa_phong" in filters and self._dte_khoa is not None:
+            query["khoa_phong_enc"] = self._dte_khoa.encrypt(
+                str(filters["khoa_phong"]),
+                b"field:khoa_phong",
+            )
+
         if "tuoi_min_enc" in filters and self._ore is not None:
             query["tuoi_enc"] = {"$gte": self._ore.encrypt_age(int(filters["tuoi_min_enc"]))}
 
@@ -114,6 +122,8 @@ class SoftwareExecutor:
         if "ma_benh" in filters:
             ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
             records = [r for r in records if r["ma_benh"] == ma_benh]
+        if "khoa_phong" in filters:
+            records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]
         if "tuoi_min_enc" in filters:
             min_age = int(filters["tuoi_min_enc"])
             records = [r for r in records if r["tuoi"] >= min_age]
@@ -127,6 +137,8 @@ class SoftwareExecutor:
         if "ma_benh" in filters:
             ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
             records = [r for r in records if r["ma_benh"] == ma_benh]
+        if "khoa_phong" in filters:
+            records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]
         if "tuoi_min_enc" in filters:
             min_age = int(filters["tuoi_min_enc"])
             records = [r for r in records if r["tuoi"] >= min_age]

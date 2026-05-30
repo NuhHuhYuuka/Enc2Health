@@ -25,7 +25,8 @@ def validate_jwt_bearer(bearer: Optional[str]) -> Dict:
         raise HTTPException(status_code=401, detail=f"invalid token: {e}")
 
 
-def generate_test_jwt(subject: str, role: str = "service", lifetime_s: int = 3600) -> str:
+def generate_test_jwt(subject: str, role: str = "service", lifetime_s: int = 3600,
+                      claims: Optional[Dict] = None) -> str:
     import time
     if not JWT_SECRET:
         raise RuntimeError("AUTH_JWT_SECRET not set")
@@ -38,4 +39,7 @@ def generate_test_jwt(subject: str, role: str = "service", lifetime_s: int = 360
         "iat": now,
         "exp": now + int(lifetime_s)
     }
+    # Thuộc tính ABAC bổ sung (vd: dept="Tim_mach")
+    if claims:
+        payload.update(claims)
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")

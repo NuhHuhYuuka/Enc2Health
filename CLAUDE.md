@@ -44,6 +44,8 @@ Lớn & gitignore: `enclave/`, `*.archive`, `*.zip` (dump/bundle sinh lại đư
 python3 scripts/demo_e2e.py
 # Demo cơ chế tự thích nghi: đợt dịch → fallback → phục hồi (KHÔNG cần Mongo/pool)
 python3 scripts/demo_adaptive.py
+# Demo ABAC: bác sĩ chỉ xem khoa mình, chống lách (cần MongoDB + data)
+python3 scripts/demo_abac.py
 
 # Smoke E2E mTLS local (1 lệnh — khuyến nghị)
 make smoke-local
@@ -67,13 +69,13 @@ python3 crypto/data/generate_ehr.py
 - **TEE ciphertext push:** `ROUTER_TEE_PUSH_CIPHERTEXT=1` để Router gom `vien_phi_enc` từ Mongo và đẩy vào Pool (mặc định tắt). `C_SOFT_METRICS_PATH` override file số liệu C_soft.
 - **Cột ciphertext MongoDB:** `ma_benh_enc` (DTE, equality), `tuoi_enc` (ORE, range `$gte/$lte`), `vien_phi_enc` (AES-GCM, giải mã để aggregate).
 - **Mã bệnh chưa thống nhất:** crypto/data dùng ICD-10 (`E11`…); một số chỗ mock dùng `DTE001..006`. `software_executor.ICD10_ALIASES` map tạm — cần thống nhất.
-- **RBAC:** admin=full · doctor=không `sum_vien_phi` (403) · researcher=bị `[MASKED]` vien_phi/ma_benh.
+- **RBAC/ABAC** (`router/rbac.py` + `router/abac.py`): admin=full · doctor=không `sum_vien_phi` (403) · admin_staff=xem viện phí, che `ma_benh` · researcher=`[MASKED]` vien_phi/ma_benh. **ABAC dept-scoping:** JWT có claim `dept` → bác sĩ chỉ xem khoa mình (Router tiêm `khoa_phong` vào filter, client không nới rộng). `ABAC_REQUIRE_DEPT=1` để strict.
 - **Stack Python:** FastAPI + pymongo + cryptography + pyope + hvac + PyJWT (xem `requirements.txt`).
 - **Shell:** môi trường Windows + WSL (kali); dùng Bash tool cho script POSIX.
 
 ## Trạng thái hiện tại (tóm tắt — chi tiết ở PROJECT.md)
 
-- ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), RBAC, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`)**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
+- ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), **RBAC+ABAC (dept-scoping, 4 role)**, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`)**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
 - ✅ Crypto/KMS: DTE/ORE/GCM/ECC, Vault, KMS API, generate_ehr.
 - ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
 - 🔴 **Mắt xích còn thiếu (phía Lan):** Pool nhận `ciphertexts` để giải mã AES-GCM trong enclave (hiện vẫn `MOCK_PATIENT_DATA`). RA-TLS còn stub. (Xem PROJECT.md §4, §5.5.)
