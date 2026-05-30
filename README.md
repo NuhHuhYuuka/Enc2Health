@@ -120,6 +120,23 @@ pip install fastapi uvicorn httpx pydantic pytest \
 
 ## Chạy hệ thống
 
+### One-command startup
+
+```bash
+make up
+```
+
+Lệnh này sẽ build image Python chung, khởi động MongoDB, chạy seeder một lần để nạp 10.000 hồ sơ EHR ciphertext, rồi mở ECALL Task Pool và Query Router.
+
+Các lệnh phụ trợ:
+
+```bash
+make ps      # xem trạng thái services
+make logs    # xem log toàn stack
+make down    # tắt stack và xoá volume
+make seed    # chạy lại seeder nếu muốn nạp dữ liệu từ đầu
+```
+
 ```bash
 # Terminal 1 — ECALL Task Pool (Lan · TEE Simulation)
 cd enclave && source ../.venv/bin/activate

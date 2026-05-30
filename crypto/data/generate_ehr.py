@@ -6,6 +6,7 @@ import sys, os, random, json
 from datetime import date, timedelta
 import uuid
 from faker import Faker
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from crypto.asym import ecc_encrypt, generate_all_department_keypairs
@@ -18,11 +19,12 @@ fake = Faker("vi_VN")
 random.seed(42)
 
 # ── Cấu hình ──────────────────────────────────────────────────────────────
-MONGO_URI    = "mongodb://localhost:27017"
-DB_NAME      = "enc2health"
-COLLECTION   = "patient_records"
+MONGO_URI    = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME      = os.getenv("MONGO_DB", "enc2health")
+COLLECTION   = os.getenv("MONGO_COLLECTION", "patient_records")
 RECORD_COUNT = int(os.getenv("EHR_RECORD_COUNT", "10000"))
 BATCH_SIZE   = int(os.getenv("EHR_BATCH_SIZE", "500"))
+FORCE_RECREATE = os.getenv("EHR_FORCE_RECREATE", "0") == "1"
 
 # ICD-10 mã bệnh phổ biến
 ICD10_CODES = {
@@ -49,24 +51,35 @@ def birth_date_from_age(admission_date: date, age: int) -> date:
     days = age * 365 + random.randint(0, 364)
     return admission_date - timedelta(days=days)
 
+
+def _load_or_create_cipher(cipher_cls, key_path: Path):
+    if key_path.exists():
+        return cipher_cls.load_key(str(key_path))
+    cipher = cipher_cls()
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    cipher.save_key(str(key_path))
+    return cipher
+
 def main():
+    key_dir = Path(__file__).resolve().parent / "keys"
+
     print("[1/5] Sinh keypairs cho tất cả Khoa (ECC P-384)...")
     dept_keypairs = generate_all_department_keypairs("ECC")
     # Lưu public keys ra file để dùng lại (private keys MUST be stored in Vault)
-    os.makedirs("data/keys", exist_ok=True)
+    key_dir.mkdir(parents=True, exist_ok=True)
     for dept, kp in dept_keypairs.items():
-        with open(f"data/keys/{dept}_public.pem", "w") as f:
+        with open(key_dir / f"{dept}_public.pem", "w") as f:
             f.write(kp["public_pem"])
     print("  Public keypairs saved to data/keys/ (private keys NOT written — store in Vault)")
 
     print("[2/5] Khởi tạo các cipher...")
     # DTE: mỗi field 1 key riêng
-    dte_ma_benh   = DTECipher()
-    dte_khoa      = DTECipher()
+    dte_ma_benh   = _load_or_create_cipher(DTECipher, key_dir / "dte_ma_benh.key")
+    dte_khoa      = _load_or_create_cipher(DTECipher, key_dir / "dte_khoa.key")
     # ORE: 1 key cho tất cả integer/date fields
-    ore = ORECipher()
+    ore = _load_or_create_cipher(ORECipher, key_dir / "ore.key")
     # AES-GCM: DEK cho lab results & billing
-    gcm = AESGCMCipher()
+    gcm = _load_or_create_cipher(AESGCMCipher, key_dir / "gcm_dek.key")
 
     # NOTE: Do NOT write raw cipher keys or DEKs to disk. Store them into Vault or use envelope encryption.
     print("  Cipher keys generated in-memory. DO NOT write raw keys to disk — push to Vault instead.")
@@ -75,6 +88,12 @@ def main():
     client = MongoClient(MONGO_URI)
     db     = client[DB_NAME]
     col    = db[COLLECTION]
+
+    if col.estimated_document_count() > 0 and not FORCE_RECREATE:
+        print(f"  Collection already has {col.estimated_document_count():,} documents; skipping reseed")
+        client.close()
+        return
+
     col.drop()  # Reset nếu chạy lại
 
     print(f"[4/5] Sinh và insert {RECORD_COUNT:,} hồ sơ...")

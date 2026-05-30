@@ -27,3 +27,13 @@ class AESGCMCipher:
 
     def decrypt_float(self, ciphertext_b64: str) -> float:
         return float(self.decrypt(ciphertext_b64))
+
+    def save_key(self, path: str):
+        with open(path, "w") as f:
+            f.write(base64.b64encode(self._key).decode())
+
+    @classmethod
+    def load_key(cls, path: str) -> "AESGCMCipher":
+        with open(path) as f:
+            key = base64.b64decode(f.read().strip())
+        return cls(key)

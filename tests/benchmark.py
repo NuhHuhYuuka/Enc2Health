@@ -4,6 +4,12 @@ import os
 import json
 import statistics
 import math
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.auth import generate_test_jwt
 
 try:
     import httpx
@@ -24,11 +30,16 @@ RUNS = 50  # số lần lặp mỗi query
 def run_query(client: httpx.Client, query_type: str, role: str, filters: dict = {}) -> float:
     """Chạy 1 query, trả về latency ms."""
     t0 = time.perf_counter()
-    headers = {}
-    token = os.environ.get("INTERNAL_AUTH_TOKEN")
-    if token:
-        headers["X-Internal-Auth"] = token
-        headers["X-Internal-Role"] = role
+    token = os.environ.get("AUTH_JWT")
+    if not token:
+        secret = os.environ.get("AUTH_JWT_SECRET")
+        if not secret:
+            raise SystemExit(
+                "Missing AUTH_JWT or AUTH_JWT_SECRET. Set AUTH_JWT_SECRET and run scripts/generate_jwt.py, or export AUTH_JWT directly."
+            )
+        os.environ["AUTH_JWT_SECRET"] = secret
+        token = generate_test_jwt(os.environ.get("AUTH_SUBJECT", "benchmark-client"), os.environ.get("AUTH_ROLE", role))
+    headers = {"Authorization": f"Bearer {token}"}
     r = client.post(f"{ROUTER_URL}/query", json={
         "query_type": query_type,
         "filters": filters,
@@ -115,10 +126,10 @@ if __name__ == "__main__":
 
     # 4. Hybrid: avg với filter (ít records hơn)
     results.append(benchmark(
-        "Hybrid Adaptive: avg_vien_phi (filtered DTE001)",
+        "Hybrid Adaptive: avg_vien_phi (filtered E11)",
         query_type="avg_vien_phi",
         role="admin",
-        filters={"ma_benh": "DTE001"}
+        filters={"ma_benh": "E11"}
     ))
 
     # 5. RBAC overhead: researcher (có masking)

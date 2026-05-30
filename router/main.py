@@ -11,6 +11,7 @@ from router.cost_model import compute_cost
 from router.rbac import RBACMiddleware
 from router.ecall_client import EcallClient
 from router.adaptive import AdaptiveController
+from router.software_executor import SoftwareExecutor
 
 app = FastAPI(title="Enc2Health Query Router", version="1.0.0")
 
@@ -19,6 +20,7 @@ rbac     = RBACMiddleware()
 ecall    = EcallClient()
 adaptive = AdaptiveController()
 adaptive.start()
+software_executor = SoftwareExecutor()
 
 class QueryRequest(BaseModel):
     query_type: str
@@ -28,24 +30,12 @@ class QueryRequest(BaseModel):
 @app.post("/query")
 async def handle_query(req: QueryRequest, request: Request):
     t0 = time.perf_counter()
-    # Prefer Authorization: Bearer <JWT> if provided
+    # Require Authorization: Bearer <JWT>
     auth_hdr = request.headers.get("authorization")
-    if auth_hdr:
-        claims = validate_jwt_bearer(auth_hdr)
-        role = claims.get("role", "doctor")
-    else:
-        # Enforce internal auth token if configured as fallback
-        expected_token = os.environ.get("INTERNAL_AUTH_TOKEN")
-        provided = request.headers.get("x-internal-auth")
-
-        if expected_token:
-            if provided != expected_token:
-                raise HTTPException(status_code=401, detail="missing or invalid internal auth")
-            # Derive role from an internal header (only trusted when internal token present)
-            role = request.headers.get("x-internal-role", "doctor")
-        else:
-            # Legacy behavior: fall back to client-supplied role (not recommended)
-            role = req.role
+    if not auth_hdr:
+        raise HTTPException(status_code=401, detail="missing Authorization header")
+    claims = validate_jwt_bearer(auth_hdr)
+    role = claims.get("role", "doctor")
 
     # T4 - RBAC check (use derived role)
     access = rbac.check(role, req.query_type)
@@ -67,7 +57,12 @@ async def handle_query(req: QueryRequest, request: Request):
         if result is None:
             raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
     else:
-        result = {"result": 0.0, "n_records": 0, "note": "SOFTWARE mode placeholder"}
+        software_result = software_executor.query(req.query_type, req.filters)
+        result = {
+            "result": software_result.result,
+            "n_records": software_result.n_records,
+            "note": "SOFTWARE mode via MongoDB ciphertext",
+        }
 
     # Mask nếu cần
     if isinstance(result, dict):

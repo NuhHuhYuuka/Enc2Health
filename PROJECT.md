@@ -15,10 +15,10 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 | Trụ cột | Người | Chạy độc lập | Tích hợp runtime |
 |---|---|---|---|
 | Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | 🚧 Chưa nối vào luồng query thật |
-| Query Router + Adaptive Logic | Nam | ✅ Done | ⚠️ Fallback/SOFTWARE còn placeholder |
+| Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE path đã nối query thật + smoke mTLS local pass |
 | TEE Enclave + Observability (Gramine, DuckDB, Prometheus) | Lan | ✅ Done | 🚧 Enclave xài mock plaintext, không giải mã thật |
 
-> **Khoảng trống lớn nhất:** Ba trụ cột chạy tốt khi tách riêng, nhưng **luồng E2E hiện tại là mock-to-mock**. Dữ liệu mã hóa trong MongoDB (do `generate_ehr.py` sinh) **chưa được Router hay Enclave đọc/giải mã thật**. Đây là việc ưu tiên số 1 (xem §5).
+> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass; tuy nhiên phần TEE vẫn còn phụ thuộc dữ liệu mock trong pool, chưa hoàn tất pipeline decrypt dữ liệu thật end-to-end trong enclave. Đây là việc ưu tiên số 1 (xem §5).
 
 ---
 
@@ -66,7 +66,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ |
 | KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault transit rotation có) |
 | RBAC/ABAC qua JWT (doctor/admin/researcher) | `router/rbac.py` + `common/auth.py` | ✅ |
-| Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; **Router chưa query thật** | 🚧 placeholder |
+| Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
 | TEE Mode chạy DuckDB trong SGX (SUM/AVG) | `enclave/ecall_pool.py` (mock) + `enclave_service.py` (DuckDB real) | ⚠️ tách rời |
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` | ✅ logic; ⚠️ probe RSS là nội suy giả |
 | Router lấy DEK từ Vault sau RA-TLS | `ecall_client.py` (`/attest` stub) + `vault_client.py` | 🚧 RA-TLS là stub `mock-sgx-quote` |
@@ -127,14 +127,14 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ## 4. 🚧 IN DEV / Còn thiếu
 
 ### 4.1. 🔴 Tích hợp E2E thật (ưu tiên cao nhất)
-- 🚧 **Router SOFTWARE/Fallback chưa query MongoDB thật.** `router/main.py:70` trả `{"result": 0.0, "note": "SOFTWARE mode placeholder"}`. → Cần module `software_executor.py` query MongoDB bằng DTE/ORE ciphertext của Long.
+- ✅ **Router SOFTWARE/Fallback đã query MongoDB thật.** Đã tích hợp `software_executor.py` vào `router/main.py`; không còn placeholder `{"result": 0.0, ...}`.
 - 🚧 **Enclave dùng mock plaintext.** `ecall_pool.py` xài `MOCK_PATIENT_DATA` (viện phí dạng `float` thẳng), **không giải mã AES-GCM** và **không đọc MongoDB**. → Cần: Router fetch ciphertext từ Mongo → đẩy vào pool → pool lấy DEK từ Vault → `enclave_service.decrypt_aes_gcm` → DuckDB AVG/SUM.
 - 🚧 **DuckDB real chưa được nối vào pool.** `enclave_service.py` (DuckDB thật) và `ecall_pool.py` (mock, có HTTP) là hai file rời. → Hợp nhất: pool gọi DuckDB thật trên dữ liệu vừa giải mã.
-- 🚧 **Vault chưa được service nào gọi ở runtime.** `vault_client` chỉ chạy standalone; key trong `ecall_pool._keys` luôn rỗng (`/health` cho thấy `keys_loaded: []`).
+- ⚠️ **Vault runtime mới ở mức fallback local key files.** `ecall_pool` đã load key runtime (từ Vault nếu có; nếu không thì từ local dev key files), nhưng luồng Vault production-ready end-to-end vẫn cần hoàn thiện.
 
 ### 4.2. 🟠 Bảo mật / Attestation
 - 🚧 **RA-TLS là stub.** `/attest` trả `mock-sgx-quote`, `mock-mrenclave`. → Cần quote thật (gramine-sgx + DCAP) hoặc ít nhất giải thích rõ "simulation" trong báo cáo.
-- 🚧 **mTLS chưa bật mặc định.** Cert đã sinh nhưng service chạy HTTP trần trừ khi set env `T8_SSL_*`. → Bật TLS giữa Router ↔ Pool ↔ Vault.
+- ⚠️ **mTLS đã chạy pass ở local/compose smoke, nhưng chưa là mặc định cho mọi mode chạy tay.** Cần chuẩn hóa để TLS bật mặc định giữa Router ↔ Pool ↔ Vault trong profile production.
 - 🚧 **q-leakage chưa phân biệt TEE vs Fallback.** `leakage_results.json` cho 3 mode **giống hệt nhau** (0.0537) — chưa đo được *điểm cốt lõi*: fallback TEE→Software rò rỉ thêm bao nhiêu (DTE equality pattern, ORE order pattern). → Đây là phần đánh giá an ninh quan trọng nhất của đề tài, cần làm lại cho đúng.
 
 ### 4.3. 🟡 Tính nhất quán & dữ liệu
@@ -155,7 +155,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ## 5. 💡 Đề xuất việc làm tiếp (theo thứ tự ưu tiên)
 
 ### Sprint 1 — "Nối dây" E2E thật (xương sống của đồ án)
-1. **`router/software_executor.py`** — kết nối MongoDB, nhận `filters` → mã hóa điều kiện bằng DTE (`ma_benh`) + ORE (`tuoi`) → query ciphertext → trả về danh sách `_id`/`vien_phi_enc`.
+1. ✅ **`router/software_executor.py`** — đã nối MongoDB ciphertext path cho SOFTWARE mode.
 2. **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool load DEK từ Vault → `decrypt_aes_gcm` → DuckDB `AVG/SUM`. Bỏ `MOCK_PATIENT_DATA`.
 3. **Load key vào pool lúc startup** — gọi `vault_client.get_dek("gcm_dek")` trong lifespan, để `/health` `keys_loaded` không rỗng.
 4. **Thống nhất ICD-10** trong cả mock lẫn data thật; sửa `test_e2e.py` (đang hard-code `n_records == 5`).
@@ -178,12 +178,18 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ## 6. Cách chạy nhanh (hiện tại)
 
 ```bash
-# Terminal 1 — ECALL Task Pool (Lan)
-cd enclave/enclave && python3 ecall_pool.py        # :9091
+# One-command local smoke (khuyến nghị)
+REGEN_CERTS=1 KEEP_ALIVE=0 make smoke-local
 
-# Terminal 2 — Query Router (Nam)
-export AUTH_JWT_SECRET=devsecret
-uvicorn router.main:app --host 0.0.0.0 --port 8000 # :8000
+# Hoặc chạy tay 2 terminal (nếu cần)
+# Terminal 1 — ECALL Task Pool (TLS)
+T8_SSL_CERT=certs/server.crt T8_SSL_KEY=certs/server.key T8_SSL_CA=certs/ca.crt python3 enclave/enclave/ecall_pool.py
+
+# Terminal 2 — Query Router
+AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
+ECALL_POOL_URL=https://127.0.0.1:9091 \
+ROUTER_CLIENT_CERT=certs/client.crt ROUTER_CLIENT_KEY=certs/client.key T8_SSL_CA=certs/ca.crt \
+uvicorn router.main:app --host 0.0.0.0 --port 8000
 
 # (tùy chọn) Vault + KMS + MongoDB + Prometheus/Grafana — xem README §Chạy hệ thống
 

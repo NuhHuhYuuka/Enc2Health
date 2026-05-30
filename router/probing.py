@@ -4,11 +4,12 @@
 
 import time
 import threading
-import httpx
+import os
+import requests
 from dataclasses import dataclass
 from typing import Optional
 
-ECALL_POOL_URL = "http://127.0.0.1:9091"
+ECALL_POOL_URL = os.environ.get("ECALL_POOL_URL", "http://127.0.0.1:9091")
 PROBE_INTERVAL_S = 5       # probe mỗi 5 giây
 SATURATION_RATIO = 2.0     # latency tăng gấp đôi → saturated
 EPC_THRESHOLD_PCT = 0.80   # RSS > 80% RAM → fallback
@@ -38,14 +39,43 @@ class EPCProber:
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
+    def _request_kwargs(self) -> dict:
+        """Build request kwargs compatible with both HTTP and HTTPS+mTLS modes."""
+        kwargs = {"timeout": 10}
+        if self.base_url.startswith("https://"):
+            ca_bundle = os.environ.get("T8_SSL_CA")
+            client_cert = os.environ.get("ROUTER_CLIENT_CERT")
+            client_key = os.environ.get("ROUTER_CLIENT_KEY")
+            kwargs["verify"] = ca_bundle if ca_bundle else True
+            if client_cert and client_key:
+                kwargs["cert"] = (client_cert, client_key)
+        return kwargs
+
+    def _auth_headers(self) -> dict:
+        token = os.environ.get("AUTH_JWT")
+        if not token:
+            try:
+                from common.auth import generate_test_jwt
+                token = generate_test_jwt(
+                    os.environ.get("AUTH_SUBJECT", "router-service"),
+                    os.environ.get("AUTH_ROLE", "service"),
+                )
+            except Exception:
+                token = None
+        return {"Authorization": f"Bearer {token}"} if token else {}
+
     def _probe_once(self) -> Optional[ProbeResult]:
         """Gửi 1 query probe nhỏ, đo latency."""
         try:
+            headers = self._auth_headers()
+            kwargs = self._request_kwargs()
+
             t0 = time.perf_counter()
-            r = httpx.post(
+            r = requests.post(
                 f"{self.base_url}/query",
                 json={"query_type": "count", "filters": {}, "role": "admin"},
-                timeout=10
+                headers=headers,
+                **kwargs,
             )
             latency_ms = (time.perf_counter() - t0) * 1000
 
@@ -53,7 +83,9 @@ class EPCProber:
                 return None
 
             # Lấy RSS từ stats endpoint
-            stats = httpx.get(f"{self.base_url}/health", timeout=5).json()
+            health_kwargs = dict(kwargs)
+            health_kwargs["timeout"] = 5
+            stats = requests.get(f"{self.base_url}/health", headers=headers, **health_kwargs).json()
             rss_mb = stats.get("uptime_s", 0) * 0  # placeholder
             # Dùng RSS_PROFILE từ c_tee_metrics để ước tính
             rss_mb = 25.8 + (latency_ms / 1.051) * 0.5  # nội suy

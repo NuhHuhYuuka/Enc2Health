@@ -6,6 +6,12 @@ import time
 import math
 import json
 import statistics
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.auth import generate_test_jwt
 
 ROUTER_URL = "http://localhost:8000"
 QUERIES_PER_CLIENT = 20
@@ -18,11 +24,14 @@ def client_worker(client_id: int, results: list, query_type: str, role: str):
         for _ in range(QUERIES_PER_CLIENT):
             try:
                 t0 = time.perf_counter()
-                headers = {}
-                token = os.environ.get("INTERNAL_AUTH_TOKEN")
-                if token:
-                    headers["X-Internal-Auth"] = token
-                    headers["X-Internal-Role"] = role
+                token = os.environ.get("AUTH_JWT")
+                if not token:
+                    secret = os.environ.get("AUTH_JWT_SECRET")
+                    if not secret:
+                        raise RuntimeError("Missing AUTH_JWT or AUTH_JWT_SECRET")
+                    os.environ["AUTH_JWT_SECRET"] = secret
+                    token = generate_test_jwt(os.environ.get("AUTH_SUBJECT", "benchmark-client"), os.environ.get("AUTH_ROLE", role))
+                headers = {"Authorization": f"Bearer {token}"}
 
                 r = client.post(f"{ROUTER_URL}/query", json={
                     "query_type": query_type,

@@ -1,0 +1,121 @@
+services:
+  certgen:
+    build:
+      context: .
+    container_name: enc2health-certgen
+    command: ["bash", "scripts/generate_mtls_certs.sh", "/certs"]
+    volumes:
+      - mtls_certs:/certs
+    restart: "no"
+
+  mongodb:
+    image: mongo:7
+    container_name: enc2health-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' localhost:27017/admin | grep 1 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  seeder:
+    build:
+      context: .
+    container_name: enc2health-seeder
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-secret-32-bytes-long-1234567890}
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: enc2health
+      MONGO_COLLECTION: patient_records
+      EHR_RECORD_COUNT: ${EHR_RECORD_COUNT:-10000}
+      EHR_BATCH_SIZE: ${EHR_BATCH_SIZE:-500}
+      EHR_FORCE_RECREATE: ${EHR_FORCE_RECREATE:-0}
+    command: ["python", "crypto/data/generate_ehr.py"]
+    volumes:
+      - keys_data:/app/crypto/data/keys
+    restart: "no"
+
+  ecall-task-pool:
+    build:
+      context: .
+    container_name: enc2health-ecall-pool
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      seeder:
+        condition: service_completed_successfully
+      certgen:
+        condition: service_completed_successfully
+    environment:
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-secret-32-bytes-long-1234567890}
+      AUTH_JWT_ISS: ${AUTH_JWT_ISS:-enc2health}
+      AUTH_JWT_AUD: ${AUTH_JWT_AUD:-enc2health_services}
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: enc2health
+      MONGO_COLLECTION: patient_records
+      T8_POOL_HOST: 0.0.0.0
+      T8_POOL_PORT: 9091
+      T8_POOL_RECORDS: ${T8_POOL_RECORDS:-10000}
+      T8_POOL_PAYLOAD_BYTES: ${T8_POOL_PAYLOAD_BYTES:-256}
+      T8_SSL_CERT: /certs/server.crt
+      T8_SSL_KEY: /certs/server.key
+      T8_SSL_CA: /certs/ca.crt
+    command: ["python", "enclave/enclave/ecall_pool.py"]
+    ports:
+      - "9091:9091"
+    volumes:
+      - keys_data:/app/crypto/data/keys
+      - mtls_certs:/certs
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,sys,httpx; verify='/certs/ca.crt'; cert=('/certs/client.crt','/certs/client.key'); r=httpx.get('https://127.0.0.1:9091/health', verify=verify, cert=cert, timeout=5); sys.exit(0 if r.status_code==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  query-router:
+    build:
+      context: .
+    container_name: enc2health-router
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      seeder:
+        condition: service_completed_successfully
+      ecall-task-pool:
+        condition: service_healthy
+    environment:
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-secret-32-bytes-long-1234567890}
+      AUTH_JWT_ISS: ${AUTH_JWT_ISS:-enc2health}
+      AUTH_JWT_AUD: ${AUTH_JWT_AUD:-enc2health_services}
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: enc2health
+      MONGO_COLLECTION: patient_records
+      ECALL_POOL_URL: https://ecall-task-pool:9091
+      ROUTER_CLIENT_CERT: /certs/client.crt
+      ROUTER_CLIENT_KEY: /certs/client.key
+      T8_SSL_CA: /certs/ca.crt
+    command: ["uvicorn", "router.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - keys_data:/app/crypto/data/keys
+      - mtls_certs:/certs
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  mongo_data:
+  keys_data:
+  mtls_certs:

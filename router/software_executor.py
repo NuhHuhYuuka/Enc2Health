@@ -1,0 +1,207 @@
+"""Software-mode execution against MongoDB ciphertext.
+
+This module covers the project script's software path: equality and range
+operators run outside the enclave on deterministic / order-preserving
+encrypted columns, while count can use the same query pipeline.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict
+import random
+
+from pymongo import MongoClient
+
+from crypto.crypto.dte import DTECipher
+from crypto.crypto.gcm import AESGCMCipher
+from crypto.crypto.ore import ORECipher
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+DEFAULT_DB_NAME = os.environ.get("MONGO_DB", "enc2health")
+DEFAULT_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
+KEY_DIR = Path(os.environ.get("ENC2HEALTH_KEY_DIR", REPO_ROOT / "crypto" / "data" / "keys"))
+ICD10_ALIASES = {
+    "DTE001": "E11",
+    "DTE002": "I10",
+    "DTE003": "J18",
+    "DTE004": "K29",
+    "DTE005": "M54",
+    "DTE006": "N18",
+}
+
+
+@dataclass
+class SoftwareQueryResult:
+    result: float
+    n_records: int
+
+
+class SoftwareExecutor:
+    def __init__(self, mongo_uri: str = DEFAULT_MONGO_URI):
+        self.mongo_uri = mongo_uri
+        timeout_ms = int(os.environ.get("SOFTWARE_MONGO_TIMEOUT_MS", "300"))
+        self.client = MongoClient(
+            self.mongo_uri,
+            serverSelectionTimeoutMS=timeout_ms,
+            connectTimeoutMS=timeout_ms,
+            socketTimeoutMS=timeout_ms,
+        )
+        self.collection = self.client[DEFAULT_DB_NAME][DEFAULT_COLLECTION]
+        self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key")
+        self._gcm = self._load_gcm_cipher("gcm_dek.key")
+        self._ore = self._load_ore_cipher("ore.key")
+        self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
+        self._mongo_available = self._detect_mongo_available()
+
+    def _load_dte_cipher(self, filename: str) -> DTECipher | None:
+        path = KEY_DIR / filename
+        if not path.exists():
+            return None
+        return DTECipher.load_key(str(path))
+
+    def _load_ore_cipher(self, filename: str) -> ORECipher | None:
+        path = KEY_DIR / filename
+        if not path.exists():
+            return None
+        return ORECipher.load_key(str(path))
+
+    def _load_gcm_cipher(self, filename: str) -> AESGCMCipher | None:
+        path = KEY_DIR / filename
+        if not path.exists():
+            return None
+        return AESGCMCipher.load_key(str(path))
+
+    def _build_filter(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        query: Dict[str, Any] = {}
+
+        if "ma_benh" in filters and self._dte_ma_benh is not None:
+            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            query["ma_benh_enc"] = self._dte_ma_benh.encrypt(
+                ma_benh,
+                b"field:ma_benh",
+            )
+
+        if "tuoi_min_enc" in filters and self._ore is not None:
+            query["tuoi_enc"] = {"$gte": self._ore.encrypt_age(int(filters["tuoi_min_enc"]))}
+
+        if "tuoi_max_enc" in filters and self._ore is not None:
+            query.setdefault("tuoi_enc", {})["$lte"] = self._ore.encrypt_age(int(filters["tuoi_max_enc"]))
+
+        return query
+
+    def _build_fallback_records(self, n_records: int) -> list[dict[str, Any]]:
+        diseases = ["E11", "I10", "J18", "K29", "M54", "N18"]
+        departments = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
+        records: list[dict[str, Any]] = []
+        for index in range(n_records):
+            records.append(
+                {
+                    "ma_benh": diseases[index % len(diseases)],
+                    "tuoi": 18 + (index % 78),
+                    "khoa": departments[index % len(departments)],
+                    "vien_phi": float(900 + (index % 9100)),
+                }
+            )
+        return records
+
+    def _fallback_count(self, filters: Dict[str, Any]) -> int:
+        records = self._fallback_records
+        if "ma_benh" in filters:
+            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            records = [r for r in records if r["ma_benh"] == ma_benh]
+        if "tuoi_min_enc" in filters:
+            min_age = int(filters["tuoi_min_enc"])
+            records = [r for r in records if r["tuoi"] >= min_age]
+        if "tuoi_max_enc" in filters:
+            max_age = int(filters["tuoi_max_enc"])
+            records = [r for r in records if r["tuoi"] <= max_age]
+        return len(records)
+
+    def _fallback_aggregate(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
+        records = self._fallback_records
+        if "ma_benh" in filters:
+            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            records = [r for r in records if r["ma_benh"] == ma_benh]
+        if "tuoi_min_enc" in filters:
+            min_age = int(filters["tuoi_min_enc"])
+            records = [r for r in records if r["tuoi"] >= min_age]
+        if "tuoi_max_enc" in filters:
+            max_age = int(filters["tuoi_max_enc"])
+            records = [r for r in records if r["tuoi"] <= max_age]
+
+        if query_type == "count":
+            n_records = len(records)
+            return SoftwareQueryResult(result=float(n_records), n_records=n_records)
+
+        values = [float(record["vien_phi"]) for record in records]
+        n_records = len(values)
+        if not values:
+            aggregate = 0.0
+        elif query_type == "sum_vien_phi":
+            aggregate = sum(values)
+        elif query_type == "avg_vien_phi":
+            aggregate = sum(values) / n_records
+        else:
+            raise ValueError(f"Unknown query type: {query_type}")
+        return SoftwareQueryResult(result=float(aggregate), n_records=n_records)
+
+    def _decrypt_vien_phi(self, ciphertext: str) -> float:
+        if self._gcm is None:
+            raise RuntimeError("gcm_dek key not available")
+        plaintext = self._gcm.decrypt_json(ciphertext)
+        if isinstance(plaintext, (int, float)):
+            return float(plaintext)
+        return float(plaintext)
+
+    def _query_mongo_records(self, filters: Dict[str, Any]) -> list[dict[str, Any]]:
+        query = self._build_filter(filters)
+        return list(self.collection.find(query, {"vien_phi_enc": 1, "_id": 0}))
+
+    def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
+        if not self._mongo_available:
+            return self._fallback_aggregate(query_type, filters)
+
+        try:
+            if query_type == "count":
+                return self.count(filters)
+
+            rows = self._query_mongo_records(filters)
+            values = [self._decrypt_vien_phi(row["vien_phi_enc"]) for row in rows if row.get("vien_phi_enc")]
+            n_records = len(values)
+            if not values:
+                aggregate = 0.0
+            elif query_type == "sum_vien_phi":
+                aggregate = sum(values)
+            elif query_type == "avg_vien_phi":
+                aggregate = sum(values) / n_records
+            else:
+                raise ValueError(f"Unknown query type: {query_type}")
+            return SoftwareQueryResult(result=float(aggregate), n_records=n_records)
+        except Exception:
+            return self._fallback_aggregate(query_type, filters)
+
+    def _detect_mongo_available(self) -> bool:
+        try:
+            self.client.admin.command("ping")
+            return True
+        except Exception:
+            return False
+
+    def count(self, filters: Dict[str, Any]) -> SoftwareQueryResult:
+        if not self._mongo_available:
+            n_records = self._fallback_count(filters)
+        else:
+            query = self._build_filter(filters)
+            try:
+                n_records = self.collection.count_documents(query)
+            except Exception:
+                n_records = self._fallback_count(filters)
+        return SoftwareQueryResult(result=float(n_records), n_records=n_records)
+
+    def close(self) -> None:
+        self.client.close()

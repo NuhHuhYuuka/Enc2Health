@@ -3,45 +3,45 @@
     "label": "SOFTWARE-only: count",
     "query_type": "count",
     "runs": 50,
-    "avg_ms": 0.677,
-    "p95_ms": 0.808,
-    "p99_ms": 0.848,
-    "qps": 1477.1
+    "avg_ms": 3.863,
+    "p95_ms": 4.974,
+    "p99_ms": 6.291,
+    "qps": 258.8
   },
   {
     "label": "TEE-only: sum_vien_phi (all records)",
     "query_type": "sum_vien_phi",
     "runs": 50,
-    "avg_ms": 15.875,
-    "p95_ms": 22.281,
-    "p99_ms": 24.108,
-    "qps": 63.0
+    "avg_ms": 70.486,
+    "p95_ms": 77.911,
+    "p99_ms": 79.084,
+    "qps": 14.2
   },
   {
     "label": "TEE-only: avg_vien_phi (all records)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 15.728,
-    "p95_ms": 23.272,
-    "p99_ms": 27.85,
-    "qps": 63.6
+    "avg_ms": 71.748,
+    "p95_ms": 80.144,
+    "p99_ms": 94.047,
+    "qps": 13.9
   },
   {
-    "label": "Hybrid Adaptive: avg_vien_phi (filtered DTE001)",
+    "label": "Hybrid Adaptive: avg_vien_phi (filtered E11)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 15.832,
-    "p95_ms": 22.241,
-    "p99_ms": 24.135,
-    "qps": 63.2
+    "avg_ms": 26.325,
+    "p95_ms": 32.699,
+    "p99_ms": 34.822,
+    "qps": 38.0
   },
   {
     "label": "Hybrid + RBAC masking: avg (researcher)",
     "query_type": "avg_vien_phi",
     "runs": 50,
-    "avg_ms": 16.105,
-    "p95_ms": 22.787,
-    "p99_ms": 23.959,
-    "qps": 62.1
+    "avg_ms": 70.781,
+    "p95_ms": 79.285,
+    "p99_ms": 89.457,
+    "qps": 14.1
   }
 ]
