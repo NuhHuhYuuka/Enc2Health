@@ -26,6 +26,7 @@ class QueryRouter:
     TEE_QUERY_TYPES = {
         "sum_vien_phi", "avg_vien_phi",
         "sum", "avg", "count_distinct", "count distinct",
+        "get_patient", "lookup_patient",
         "stddev", "median",
     }
     # Toán tử chạy được trên ciphertext bằng DTE/ORE
@@ -42,6 +43,9 @@ class QueryRouter:
 
         if q in self.TEE_QUERY_TYPES:
             reason = (
+                "PII lookup cần private key và giải mã trong TEE enclave"
+                if q in ("get_patient", "lookup_patient")
+                else
                 "COUNT DISTINCT cần enclave (deduplicate trên plaintext)"
                 if q in ("count_distinct", "count distinct")
                 else "Aggregation operator cần giải mã trong TEE enclave"

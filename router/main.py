@@ -47,6 +47,7 @@ TEE_PUSH_CIPHERTEXT = os.environ.get("ROUTER_TEE_PUSH_CIPHERTEXT", "0") == "1"
 class QueryRequest(BaseModel):
     query_type: str
     filters: Dict = Field(default_factory=dict)
+    patient_id: Optional[str] = None
     role: str = "doctor"
 
 @app.post("/query")
@@ -72,11 +73,39 @@ async def handle_query(req: QueryRequest, request: Request):
     decision = router.route(req.query_type, eff_filters)
 
     # T6 - Adaptive switching
-    actual_mode = adaptive.get_execution_mode(decision.mode)
+    normalized_query_type = req.query_type.lower().strip().replace("-", "_")
+    is_pii_lookup = normalized_query_type in {"get_patient", "lookup_patient"}
+    actual_mode = decision.mode if is_pii_lookup else adaptive.get_execution_mode(decision.mode)
 
     # T9 - Execute
     ciphertext_count = None
-    if actual_mode == ExecutionMode.TEE:
+    if is_pii_lookup:
+        patient_id = req.patient_id or eff_filters.get("patient_id")
+        if not patient_id:
+            raise HTTPException(status_code=400, detail="patient_id is required for get_patient")
+        try:
+            pii_ciphertext = software_executor.fetch_patient_pii_ciphertext(str(patient_id))
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        scoped_dept = access.scope_filters.get("khoa_phong")
+        if scoped_dept and pii_ciphertext["dept"] != scoped_dept:
+            raise HTTPException(status_code=403, detail="ABAC dept-scope denied for this patient")
+
+        result = ecall.query_pii(pii_ciphertext["pii_enc"], pii_ciphertext["dept"])
+        if result is None:
+            raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
+        pii_plaintext = result.get("pii", result)
+        result = {
+            "patient_id": pii_ciphertext["patient_id"],
+            "dept": pii_ciphertext["dept"],
+            "pii": abac.mask_pii(pii_plaintext, role),
+            "query_type": normalized_query_type,
+            "n_records": 1,
+        }
+    elif actual_mode == ExecutionMode.TEE:
         ciphertexts = None
         if TEE_PUSH_CIPHERTEXT:
             ciphertexts = software_executor.fetch_vien_phi_ciphertexts(eff_filters)

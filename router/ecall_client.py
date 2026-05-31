@@ -198,3 +198,40 @@ class EcallClient:
         except Exception as e:
             print(f"[EcallClient] Lỗi: {e}")
             return None
+
+    def query_pii(self, pii_enc: str, dept: str) -> Optional[dict]:
+        """Send a PII ciphertext to the ECALL pool for enclave-only ECC decrypt."""
+        payload = {"pii_enc": pii_enc, "dept": dept}
+        try:
+            headers = {"Authorization": f"Bearer {_auth_jwt()}"}
+
+            client_cert = os.environ.get("ROUTER_CLIENT_CERT")
+            client_key = os.environ.get("ROUTER_CLIENT_KEY")
+            ca_bundle = os.environ.get("T8_SSL_CA")
+
+            verify = ca_bundle if ca_bundle else True
+            cert = (client_cert, client_key) if client_cert and client_key else None
+
+            t0 = time.perf_counter()
+            try:
+                with httpx.Client(verify=verify, cert=cert, timeout=TIMEOUT_S) as c:
+                    r = c.post(f"{self.base_url}/query/pii", json=payload, headers=headers)
+            except Exception:
+                r = requests.post(
+                    f"{self.base_url}/query/pii",
+                    json=payload,
+                    headers=headers,
+                    timeout=TIMEOUT_S,
+                    verify=verify,
+                    cert=cert,
+                )
+            elapsed = (time.perf_counter() - t0) * 1000
+            if r.status_code == 200:
+                result = r.json()
+                result["router_latency_ms"] = round(elapsed, 3)
+                return result
+            print(f"[EcallClient] PII error {r.status_code}: {r.text}")
+            return None
+        except Exception as e:
+            print(f"[EcallClient] PII lỗi: {e}")
+            return None

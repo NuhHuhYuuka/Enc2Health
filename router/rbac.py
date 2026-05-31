@@ -8,25 +8,29 @@ from typing import Optional
 # ── Role definitions ─────────────────────────────────────────────
 ROLE_PERMISSIONS = {
     "admin": {
-        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count"},
+        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count", "get_patient", "lookup_patient"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,
+        "pii_access": "full",
     },
     "doctor": {
-        "allowed_query_types": {"avg_vien_phi", "count"},
+        "allowed_query_types": {"avg_vien_phi", "count", "get_patient", "lookup_patient"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,
+        "pii_access": "full",
     },
     # Nhân viên hành chính: chỉ xử lý viện phí, KHÔNG xem chẩn đoán y khoa (kịch bản §3).
     "admin_staff": {
-        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count"},
+        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count", "get_patient", "lookup_patient"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": False,    # ẩn mã bệnh / chẩn đoán
+        "pii_access": "partial",
     },
     "researcher": {
-        "allowed_query_types": {"avg_vien_phi", "count"},
+        "allowed_query_types": {"avg_vien_phi", "count", "get_patient", "lookup_patient"},
         "can_see_vien_phi": False,   # chỉ thấy kết quả aggregate, không thấy raw
         "can_see_ma_benh": False,    # ẩn mã bệnh
+        "pii_access": "masked",
     },
 }
 
@@ -81,3 +85,17 @@ class RBACMiddleware:
             if "result" in masked:
                 masked["result"] = "[MASKED]"
         return masked
+
+    def mask_pii(self, pii: dict, role: str) -> dict:
+        """Mask PII plaintext after enclave decryption, according to role."""
+        access = ROLE_PERMISSIONS.get(role, {}).get("pii_access", "masked")
+        if access == "full":
+            return dict(pii)
+        if access == "partial":
+            return {
+                "ho_ten": pii.get("ho_ten", "[MASKED]"),
+                "cmnd": "[MASKED]",
+                "ngay_sinh": pii.get("ngay_sinh", "[MASKED]"),
+                "dia_chi": "[MASKED]",
+            }
+        return {key: "[MASKED]" for key in ("ho_ten", "cmnd", "ngay_sinh", "dia_chi")}

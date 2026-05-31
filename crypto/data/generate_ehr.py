@@ -69,11 +69,21 @@ def _load_or_create_dept_keypairs(key_dir: Path) -> dict:
     mỗi người chạy ra key khác nhau.)
     """
     from crypto.asym import generate_ecc_keypair
+    from cryptography.hazmat.primitives import serialization
+
+    def keypair_matches(private_pem: bytes, public_pem: bytes) -> bool:
+        try:
+            private_key = serialization.load_pem_private_key(private_pem, password=None)
+            public_key = serialization.load_pem_public_key(public_pem)
+            return private_key.public_key().public_numbers() == public_key.public_numbers()
+        except Exception:
+            return False
+
     result = {}
     for dept in DEPARTMENTS:
         pub_path = key_dir / f"{dept}_public.pem"
         priv_path = key_dir / f"{dept}_private.pem"
-        if pub_path.exists():
+        if pub_path.exists() and priv_path.exists() and keypair_matches(priv_path.read_bytes(), pub_path.read_bytes()):
             result[dept] = {"public_pem": pub_path.read_text()}
         else:
             priv, pub = generate_ecc_keypair()
@@ -134,15 +144,26 @@ def main():
             "creatinine": round(random.uniform(50, 300), 0),  # umol/L
         }
 
+        ho_ten = fake.name()
+        cmnd = fake.numerify("0##########")
+        dia_chi = fake.address()
+        pii_payload = {
+            "ho_ten": ho_ten,
+            "cmnd": cmnd,
+            "ngay_sinh": ngay_sinh.isoformat(),
+            "dia_chi": dia_chi,
+        }
+
         doc = {
             # Plaintext fields
             "patient_id": str(uuid.uuid4()),
             "khoa_phong_plaintext": dept,  # Chỉ để debug, xóa trong production
 
             # PII – Asymmetric ECC
-            "ho_ten_enc":  ecc_encrypt(fake.name(), pub_pem),
-            "cmnd_enc":    ecc_encrypt(fake.numerify("0##########"), pub_pem),
-            "dia_chi_enc": ecc_encrypt(fake.address(), pub_pem),
+            "pii_enc": ecc_encrypt(json.dumps(pii_payload, ensure_ascii=False), pub_pem),
+            "ho_ten_enc":  ecc_encrypt(ho_ten, pub_pem),
+            "cmnd_enc":    ecc_encrypt(cmnd, pub_pem),
+            "dia_chi_enc": ecc_encrypt(dia_chi, pub_pem),
             "dept":        dept,  # Để biết dùng keypair nào khi decrypt
 
             # Clinical – DTE AES-SIV

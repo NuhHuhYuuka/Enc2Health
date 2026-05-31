@@ -45,8 +45,9 @@ tuân thủ giao thức (không phá hoại dữ liệu) nhưng **tò mò**, có
 |---|---|---|
 | Mã hóa DTE/ORE/GCM/ECC | ✅ **THẬT** | `cryptography` + `pyope`, có self-test |
 | Lưu & tìm kiếm trên ciphertext (MongoDB) | ✅ **THẬT** | DTE equality + ORE range chạy trực tiếp trên bản mã |
-| Router: routing, RBAC/ABAC, cost model, adaptive | ✅ **THẬT** | 30/30 unit test |
+| Router: routing, RBAC/ABAC, cost model, adaptive | ✅ **THẬT** | 33/33 unit test |
 | Enclave nhận ciphertext → giải mã AES-GCM → DuckDB SUM/AVG | ✅ **THẬT** (logic) | Chạy trong tiến trình Python, kết quả khớp Mongo (E2E 7/7) |
+| Enclave nhận `pii_enc` → lấy private key khoa → giải mã ECC PII | ✅ **THẬT** (logic) | Router luôn route `get_patient`/`lookup_patient` qua Pool/TEE và áp RBAC/ABAC mask; cần SGX hardware thật để plaintext RAM được phần cứng bảo vệ. |
 | **SGX Enclave (cô lập RAM bằng phần cứng)** | 🟡 **MÔ PHỎNG** | Chạy `gramine-direct` (`remote_attestation = "none"`). **Trong simulation, plaintext VẪN nằm ở RAM thường** — guarantee "admin không đọc được RAM" là *kiến trúc*, **chưa được phần cứng cưỡng chế**. Cần SGX hardware thật để guarantee có hiệu lực. |
 | **Attestation (RA-TLS)** | 🟡 **SIGNED SIMULATION** | `/attest` trả document ký **HMAC + freshness (timestamp)**, KHÔNG phải SGX Quote/DCAP thật. Chống replay cơ bản, nhưng **không chứng minh được danh tính enclave bằng phần cứng**. |
 | Vault (Envelope Encryption / unwrap DEK) | ✅ **THẬT** | DEK được wrap bằng Vault Transit lúc setup, KV-v2 chỉ lưu ciphertext wrapped blob + metadata; runtime dùng AppRole (`VAULT_ROLE_ID` + `VAULT_SECRET_ID` → token) để unwrap DEK qua Transit. File local chỉ là **fallback dev có chủ ý** khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. |
@@ -90,7 +91,7 @@ tuân thủ giao thức (không phá hoại dữ liệu) nhưng **tò mò**, có
 | mTLS chưa mặc định | Bật TLS mặc định Router↔Pool↔Vault | Thấp |
 | Chưa đánh ORE | `tests/attack_ore.py`: tái dựng rank/xấp xỉ tuổi từ ORE ciphertext | Thấp |
 | q-leakage chưa định lượng chặt | Đo "bit rò thêm" khi fallback (định lượng so sánh) | Trung bình |
-| Client-side enc mô phỏng | App client mã hóa trước khi gửi (đúng kịch bản) | Trung bình |
+| Client-side enc mô phỏng | App client mã hóa trước khi gửi (đúng kịch bản); hiện `generate_ehr.py` đã sinh `pii_enc` ECC theo khoa nhưng chưa có HIS/EMR client thật | Trung bình |
 | HL7 FHIR | Parse FHIR Document thật thay vì chỉ schema | Trung bình |
 
 ---

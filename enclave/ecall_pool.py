@@ -53,11 +53,13 @@ except Exception:
 
 from crypto.crypto.dte import DTECipher
 from crypto.crypto.ore import ORECipher
+from crypto.crypto.asym import ecc_decrypt
 
 try:
-    from crypto.vault.vault_client import get_dek
+    from crypto.vault.vault_client import get_dek, get_department_private_key
 except Exception:
     get_dek = None
+    get_department_private_key = None
 
 # Add enclave directory to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -357,6 +359,17 @@ class QueryResponse(BaseModel):
     query_type: str
 
 
+class PIIQueryRequest(BaseModel):
+    pii_enc: str
+    dept: str
+
+
+class PIIQueryResponse(BaseModel):
+    pii: Dict[str, object]
+    dept: str
+    latency_ms: float
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
     status: str
@@ -491,6 +504,43 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
     }
 
 
+def _load_department_private_key(dept: str) -> bytes:
+    private_key = None
+    if get_department_private_key is not None:
+        try:
+            private_key = get_department_private_key(dept)
+            print(f"[T8 Pool] Loaded private key from Vault for dept={dept}")
+        except Exception as exc:
+            print(f"[T8 Pool] Vault private key load failed for {dept}: {exc}")
+
+    if private_key is None and ALLOW_LOCAL_KEY_FALLBACK:
+        local_path = REPO_ROOT / "crypto" / "data" / "keys" / f"{dept}_private.pem"
+        if local_path.exists():
+            private_key = local_path.read_bytes()
+            print(f"[T8 Pool] Loaded private key from local dev file (explicit fallback): {dept}")
+
+    if private_key is None:
+        raise RuntimeError(f"Private key unavailable for department: {dept}")
+    return private_key
+
+
+def _execute_pii_query(req: PIIQueryRequest) -> Dict[str, object]:
+    t_start = time.perf_counter()
+    private_key = _load_department_private_key(req.dept)
+    try:
+        plaintext = ecc_decrypt(req.pii_enc, private_key)
+        pii_data = json.loads(plaintext)
+    finally:
+        private_key = b"\x00" * len(private_key)
+        del private_key
+
+    return {
+        "pii": pii_data,
+        "dept": req.dept,
+        "latency_ms": (time.perf_counter() - t_start) * 1000,
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # FastAPI Application
 # ─────────────────────────────────────────────────────────────────────────────
@@ -585,6 +635,26 @@ async def query_endpoint(req: QueryRequest, request: Request):
         raise HTTPException(status_code=504, detail="Query timeout (>30s)")
     except Exception as e:
         print(f"[T8 Pool] Error: {repr(e)}", file=sys.stderr)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Internal error")
+
+
+@app.post("/query/pii", response_model=PIIQueryResponse, summary="Decrypt patient PII in enclave")
+async def query_pii_endpoint(req: PIIQueryRequest, request: Request):
+    """Decrypt ECC-encrypted PII with the per-department private key inside the pool."""
+    auth_hdr = request.headers.get("authorization")
+    if not auth_hdr:
+        raise HTTPException(status_code=401, detail="missing Authorization header")
+    validate_jwt_bearer(auth_hdr)
+
+    try:
+        future = _executor.submit(_execute_pii_query, req)
+        result = future.result(timeout=30)
+        return PIIQueryResponse(**result)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="PII query timeout (>30s)")
+    except Exception as e:
+        print(f"[T8 Pool] PII error: {repr(e)}", file=sys.stderr)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal error")
 

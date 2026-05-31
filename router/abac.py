@@ -72,3 +72,6 @@ class AbacPolicy:
 
     def mask_result(self, result: dict, role: str) -> dict:
         return self._rbac.mask_result(result, role)
+
+    def mask_pii(self, pii: dict, role: str) -> dict:
+        return self._rbac.mask_pii(pii, role)

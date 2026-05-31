@@ -14,6 +14,7 @@ from typing import Any, Dict
 import random
 
 from pymongo import MongoClient
+from bson import ObjectId
 
 from crypto.crypto.dte import DTECipher
 from crypto.crypto.gcm import AESGCMCipher
@@ -193,6 +194,40 @@ class SoftwareExecutor:
             if STRICT_MODE:
                 raise
             return []
+
+    def fetch_patient_pii_ciphertext(self, patient_id: str) -> dict[str, Any]:
+        """Lấy `pii_enc` và khoa của một bệnh nhân từ MongoDB, không giải mã."""
+        if not self._mongo_available:
+            raise RuntimeError("MongoDB unavailable; cannot fetch patient PII ciphertext")
+
+        candidates: list[dict[str, Any]] = [{"patient_id": patient_id}]
+        if ObjectId.is_valid(patient_id):
+            candidates.append({"_id": ObjectId(patient_id)})
+
+        projection = {"pii_enc": 1, "dept": 1, "khoa_phong_plaintext": 1, "patient_id": 1}
+        record = None
+        for query in candidates:
+            record = self.collection.find_one(query, projection)
+            if record is not None:
+                break
+
+        if record is None:
+            raise LookupError(f"Patient not found: {patient_id}")
+        if not record.get("pii_enc"):
+            raise RuntimeError(
+                "Patient record has no pii_enc; reseed with "
+                "EHR_FORCE_RECREATE=1 python3 crypto/data/generate_ehr.py"
+            )
+
+        dept = record.get("dept") or record.get("khoa_phong_plaintext")
+        if not dept:
+            raise RuntimeError(f"Patient record missing department: {patient_id}")
+
+        return {
+            "patient_id": record.get("patient_id", patient_id),
+            "pii_enc": record["pii_enc"],
+            "dept": dept,
+        }
 
     def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
         if not self._mongo_available:

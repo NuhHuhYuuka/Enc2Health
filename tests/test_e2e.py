@@ -23,14 +23,15 @@ MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
 KEY_DIR = Path(__file__).resolve().parents[1] / "crypto" / "data" / "keys"
 
 
-def _token(role: str) -> str:
+def _token(role: str, dept: str | None = None) -> str:
     secret = os.environ.get("AUTH_JWT_SECRET", "dev-secret-32-bytes-long-1234567890")
     os.environ["AUTH_JWT_SECRET"] = secret
-    return generate_test_jwt("e2e-test", role)
+    claims = {"dept": dept} if dept else None
+    return generate_test_jwt("e2e-test", role, claims=claims)
 
 
-def _headers(role: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {_token(role)}"}
+def _headers(role: str, dept: str | None = None) -> dict[str, str]:
+    return {"Authorization": f"Bearer {_token(role, dept=dept)}"}
 
 
 def _mongo_collection():
@@ -81,6 +82,16 @@ def _expected_values(filters: dict) -> list[float]:
 def _expected_count(filters: dict) -> int:
     col = _mongo_collection()
     return int(col.count_documents(_mongo_filter(filters)))
+
+
+def _patient_with_pii(dept: str | None = None) -> dict:
+    query = {"pii_enc": {"$exists": True}}
+    if dept:
+        query["dept"] = dept
+    row = _mongo_collection().find_one(query, {"patient_id": 1, "dept": 1, "pii_enc": 1})
+    if not row:
+        pytest.skip("Mongo dataset has no pii_enc records; reseed with EHR_FORCE_RECREATE=1")
+    return row
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -205,3 +216,47 @@ def test_filter_by_ma_benh():
     assert r_all.json()["result"]["n_records"] == len(all_values)
     assert r_filtered.json()["result"]["n_records"] == len(filtered_values)
     assert len(filtered_values) < len(all_values)
+
+
+def test_pii_decrypt_in_enclave_doctor():
+    """Bác sĩ đúng khoa xem được PII giải mã trong Pool/TEE."""
+    patient = _patient_with_pii("Tim_mach")
+    r = httpx.post(
+        f"{ROUTER_URL}/query",
+        json={"query_type": "get_patient", "patient_id": patient["patient_id"], "role": "doctor"},
+        headers=_headers("doctor", dept="Tim_mach"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["mode"] == "tee"
+    assert data["result"]["dept"] == "Tim_mach"
+    assert data["result"]["pii"]["ho_ten"] != "[MASKED]"
+    assert data["result"]["pii"]["cmnd"] != "[MASKED]"
+
+
+def test_pii_masked_for_researcher():
+    """Researcher được phép lookup nhưng PII bị mask hoàn toàn."""
+    patient = _patient_with_pii()
+    r = httpx.post(
+        f"{ROUTER_URL}/query",
+        json={"query_type": "get_patient", "patient_id": patient["patient_id"], "role": "researcher"},
+        headers=_headers("researcher"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    pii = r.json()["result"]["pii"]
+    assert pii["ho_ten"] == "[MASKED]"
+    assert pii["cmnd"] == "[MASKED]"
+
+
+def test_pii_abac_wrong_dept_for_doctor():
+    """Bác sĩ Tim_mach không xem được bệnh nhân khoa khác."""
+    patient = _patient_with_pii("Noi")
+    r = httpx.post(
+        f"{ROUTER_URL}/query",
+        json={"query_type": "get_patient", "patient_id": patient["patient_id"], "role": "doctor"},
+        headers=_headers("doctor", dept="Tim_mach"),
+        timeout=30,
+    )
+    assert r.status_code == 403

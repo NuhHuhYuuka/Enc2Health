@@ -39,6 +39,11 @@ def test_count_distinct_routes_to_tee():
     assert r.route("count_distinct").mode == ExecutionMode.TEE
     assert r.route("count distinct").mode == ExecutionMode.TEE
 
+def test_get_patient_routes_to_tee():
+    r = QueryRouter()
+    assert r.route("get_patient").mode == ExecutionMode.TEE
+    assert r.route("lookup_patient").mode == ExecutionMode.TEE
+
 def test_group_by_routes_to_software():
     r = QueryRouter()
     assert r.route("group_by").mode == ExecutionMode.SOFTWARE
@@ -68,6 +73,14 @@ def test_researcher_avg_masked():
     assert d.allowed is True
     assert "vien_phi" in d.masked_fields
     assert "ma_benh" in d.masked_fields
+
+def test_pii_roles_allowed_with_masking():
+    r = RBACMiddleware()
+    assert r.check("doctor", "get_patient").allowed is True
+    assert r.check("admin_staff", "get_patient").allowed is True
+    assert r.check("researcher", "get_patient").allowed is True
+    assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "admin_staff")["cmnd"] == "[MASKED]"
+    assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "researcher")["ho_ten"] == "[MASKED]"
 
 def test_invalid_role_denied():
     r = RBACMiddleware()
@@ -117,6 +130,13 @@ def test_fetch_ciphertexts_empty_when_mongo_unavailable():
     ex._mongo_available = False
     assert ex.fetch_vien_phi_ciphertexts({"ma_benh": "E11"}) == []
     assert ex.mongo_available is False
+
+def test_fetch_patient_pii_requires_mongo():
+    from router.software_executor import SoftwareExecutor
+    ex = SoftwareExecutor.__new__(SoftwareExecutor)
+    ex._mongo_available = False
+    with pytest.raises(RuntimeError):
+        ex.fetch_patient_pii_ciphertext("pid-1")
 
 # ── T6: Adaptive state machine (tất định, không cần pool) ────────
 
