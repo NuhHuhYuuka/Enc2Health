@@ -15,7 +15,7 @@ Môn **NT219.Q2.ANTT**. 3 thành viên: Long (mã hóa & KMS), Lan (TEE/SGX & ob
 | Service | Cổng | Chủ | File chính |
 |---|---|---|---|
 | Query Router (FastAPI) | 8000 | Nam | `router/main.py` |
-| ECALL Task Pool (TEE sim) | 9091 | Lan | `enclave/enclave/ecall_pool.py` *(không trong git)* |
+| ECALL Task Pool (TEE sim) | 9091 | Lan | `enclave/ecall_pool.py` *(không trong git)* |
 | HashiCorp Vault | 8200 | Long | `crypto/vault/` |
 | KMS API | 8001 | Long | `crypto/kms_api/main.py` |
 | Prometheus / Grafana / exporter | 9090 / 3000 / 8002 | Lan | `enclave/monitoring/` *(không trong git)* |
@@ -68,7 +68,7 @@ python3 crypto/data/generate_ehr.py
 - **mTLS qua env:** `T8_SSL_CA`, `ROUTER_CLIENT_CERT/KEY`, `ECALL_POOL_URL=https://...`. Không set thì chạy HTTP trần.
 - **TEE ciphertext push:** `ROUTER_TEE_PUSH_CIPHERTEXT=1` để Router gom `vien_phi_enc` từ Mongo và đẩy vào Pool (mặc định tắt). `C_SOFT_METRICS_PATH` override file số liệu C_soft.
 - **Cột ciphertext MongoDB:** `ma_benh_enc` (DTE, equality), `tuoi_enc` (ORE, range `$gte/$lte`), `vien_phi_enc` (AES-GCM, giải mã để aggregate).
-- **Mã bệnh chưa thống nhất:** crypto/data dùng ICD-10 (`E11`…); một số chỗ mock dùng `DTE001..006`. `software_executor.ICD10_ALIASES` map tạm — cần thống nhất.
+- **Mã bệnh ICD-10:** luồng chính dùng ICD-10 (`E11`, `I10`, ...). Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
 - **RBAC/ABAC** (`router/rbac.py` + `router/abac.py`): admin=full · doctor=không `sum_vien_phi` (403) · admin_staff=xem viện phí, che `ma_benh` · researcher=`[MASKED]` vien_phi/ma_benh. **ABAC dept-scoping:** JWT có claim `dept` → bác sĩ chỉ xem khoa mình (Router tiêm `khoa_phong` vào filter, client không nới rộng). `ABAC_REQUIRE_DEPT=1` để strict.
 - **Stack Python:** FastAPI + pymongo + cryptography + pyope + hvac + PyJWT (xem `requirements.txt`).
 - **Shell:** môi trường Windows + WSL (kali); dùng Bash tool cho script POSIX.
@@ -87,7 +87,7 @@ python3 crypto/data/generate_ehr.py
 - `tests/test_router.py`: 30/30 passed ✅
 - `tests/test_e2e.py`: 7/7 passed against live stack ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
-- `tests/attack_bipartite.py`: added stub (simulated experiment) ✅
+- `tests/attack_bipartite.py`: upgraded to reproducible rank-linkage evaluation (`attack_results.json` + optional `attack_chart.png`) ✅
 - `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅

@@ -6,6 +6,10 @@ import requests
 import os
 import ssl
 import time
+import json
+import hmac
+import hashlib
+import base64
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +33,43 @@ def _auth_jwt() -> str:
     # common.auth reads AUTH_JWT_SECRET from process env at import time, so set it here.
     os.environ["AUTH_JWT_SECRET"] = secret
     return generate_test_jwt(os.environ.get("AUTH_SUBJECT", "router-service"), os.environ.get("AUTH_ROLE", "service"))
+
+
+def _verify_attestation_document(data: dict) -> bool:
+    expected_mrenclave = os.environ.get("T8_EXPECTED_MRENCLAVE")
+    if expected_mrenclave and data.get("mrenclave") != expected_mrenclave:
+        print("[EcallClient] Attestation MRENCLAVE mismatch")
+        return False
+
+    # Signed simulation attestation (HMAC) verification.
+    quote_b64 = data.get("quote")
+    signature = data.get("signature")
+    if quote_b64 and signature:
+        secret = os.environ.get("T8_ATTESTATION_SECRET", "enc2health-dev-attestation-secret")
+        try:
+            quote_raw = base64.b64decode(quote_b64)
+            expected_sig = hmac.new(secret.encode(), quote_raw, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected_sig, str(signature)):
+                print("[EcallClient] Attestation signature mismatch")
+                return False
+
+            payload = json.loads(quote_raw.decode())
+            ts = int(payload.get("timestamp", data.get("timestamp", 0)))
+            max_age = int(data.get("max_age_s", os.environ.get("T8_ATTESTATION_MAX_AGE_S", "120")))
+            if ts and abs(int(time.time()) - ts) > max_age:
+                print("[EcallClient] Attestation document expired")
+                return False
+            return True
+        except Exception as exc:
+            print(f"[EcallClient] Attestation parse error: {exc}")
+            return False
+
+    # Backward compatibility: if signature is absent, allow only when strict checking is disabled.
+    strict = os.environ.get("ECALL_ATTEST_REQUIRED", "1") == "1"
+    if strict:
+        print("[EcallClient] Attestation signature missing while ECALL_ATTEST_REQUIRED=1")
+        return False
+    return True
 
 class EcallClient:
     """
@@ -63,11 +104,7 @@ class EcallClient:
                         r = c.get(f"{self.base_url}/attest", headers=headers)
                         if r.status_code == 200:
                             data = r.json()
-                            expected = os.environ.get("T8_EXPECTED_MRENCLAVE")
-                            if expected and data.get("mrenclave") != expected:
-                                print("[EcallClient] Attestation MRENCLAVE mismatch")
-                                return False
-                            return True
+                            return _verify_attestation_document(data)
                     except Exception:
                         pass
 

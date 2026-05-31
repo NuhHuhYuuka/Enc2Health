@@ -8,7 +8,11 @@ Replaces Intel SGX SDK EDL (incompatible with Gramine) with HTTP/FastAPI Python.
 """
 
 import base64
+import hashlib
+import hmac
+import json
 import os
+import secrets
 import sys
 import time
 import traceback
@@ -69,9 +73,17 @@ POOL_RECORDS = int(os.environ.get("T8_POOL_RECORDS", "10000"))
 POOL_PAYLOAD_BYTES = int(os.environ.get("T8_POOL_PAYLOAD_BYTES", "256"))
 USE_INDEXES = os.environ.get("T8_POOL_USE_INDEXES", "1") != "0"
 DATA_MODE = os.environ.get("T8_POOL_DATA_MODE", "auto").strip().lower()  # auto | mongo | mock
+STRICT_MODE = os.environ.get("T8_STRICT_MODE", "0") == "1"
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.environ.get("MONGO_DB", "enc2health")
 MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
+
+ALLOW_LEGACY_DTE_CODES = os.environ.get("ALLOW_LEGACY_DTE_CODES", "0") == "1"
+
+ATTESTATION_SECRET = os.environ.get("T8_ATTESTATION_SECRET", "enc2health-dev-attestation-secret")
+ATTESTATION_KEY_ID = os.environ.get("T8_ATTESTATION_KEY_ID", "dev-kid-1")
+ATTESTATION_MAX_AGE_S = int(os.environ.get("T8_ATTESTATION_MAX_AGE_S", "120"))
+_BOOT_ID = secrets.token_hex(16)
 
 ICD10_ALIASES = {
     "DTE001": "E11",
@@ -80,7 +92,7 @@ ICD10_ALIASES = {
     "DTE004": "K29",
     "DTE005": "M54",
     "DTE006": "N18",
-}
+} if ALLOW_LEGACY_DTE_CODES else {}
 
 # Global state (in-memory, process-only)
 _keys: Dict[str, bytes] = {}
@@ -271,6 +283,29 @@ def _records_for_min_age(min_age: int) -> List[dict]:
 def _normalize_ma_benh(value: str) -> str:
     return ICD10_ALIASES.get(value, value)
 
+
+def _make_attestation_payload() -> dict:
+    payload = {
+        "mrenclave": os.environ.get("T8_EXPECTED_MRENCLAVE", "simulated-mrenclave"),
+        "timestamp": int(time.time()),
+        "boot_id": _BOOT_ID,
+        "host": HOST,
+        "port": PORT,
+    }
+    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    signature = hmac.new(ATTESTATION_SECRET.encode(), payload_json, hashlib.sha256).hexdigest()
+    quote = _b64.b64encode(payload_json).decode()
+    return {
+        "mrenclave": payload["mrenclave"],
+        "quote": quote,
+        "signature": signature,
+        "signature_alg": "HMAC-SHA256",
+        "kid": ATTESTATION_KEY_ID,
+        "timestamp": payload["timestamp"],
+        "max_age_s": ATTESTATION_MAX_AGE_S,
+        "mode": "simulated-signed-attestation",
+    }
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic Models
 # ─────────────────────────────────────────────────────────────────────────────
@@ -281,7 +316,7 @@ class QueryRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "query_type": "avg_vien_phi",
-                "filters": {"ma_benh": "DTE001"},
+                "filters": {"ma_benh": "E11"},
                 "role": "doctor"
             }
         }
@@ -422,6 +457,8 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
                 role=req.role,
             ))
         else:
+            if STRICT_MODE:
+                raise RuntimeError("Strict mode forbids fallback aggregate without Mongo/ciphertexts")
             result_data = enclave_service.query_patient_aggregate(req.query_type, normalized_filters)
     latency_ms = (time.perf_counter() - t_start) * 1000
 
@@ -457,9 +494,13 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("T8_POOL_DATA_MODE=mongo but Mongo ciphertext path is unavailable")
 
     if not mongo_ready:
+        if STRICT_MODE:
+            raise RuntimeError("T8_STRICT_MODE=1 requires Mongo ciphertext path; mock fallback is disabled")
         # Do not load the heavy mock dataset into the enclave by default.
         # Create an empty patient table to avoid accidental plaintext use.
         enclave_service.register_patient_rows([])
+    if STRICT_MODE and not _keys_loaded:
+        raise RuntimeError("T8_STRICT_MODE=1 requires gcm_dek loaded at startup")
     print("[T8 Pool] ECALL Task Pool started")
     print(f"  - Workers: {POOL_WORKERS}")
     print(f"  - Port: {PORT}")
@@ -469,6 +510,7 @@ async def lifespan(app: FastAPI):
     else:
         print("  - Mode: DuckDB-backed simulation (gramine-direct)")
     print(f"  - Data mode policy: {DATA_MODE}")
+    print(f"  - Strict mode: {STRICT_MODE}")
     try:
         yield
     finally:
@@ -483,6 +525,12 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.get("/attest", summary="Return signed attestation document")
+async def attest_endpoint():
+    """Return a signed simulation attestation document for Router verification."""
+    return _make_attestation_payload()
 
 
 @app.post("/query", response_model=QueryResponse, summary="Execute medical query")
@@ -556,6 +604,8 @@ async def stats_endpoint():
         "payload_bytes": POOL_PAYLOAD_BYTES,
         "indexed": USE_INDEXES,
         "keys_loaded": len(_keys),
+        "strict_mode": STRICT_MODE,
+        "legacy_dte_aliases_enabled": ALLOW_LEGACY_DTE_CODES,
     }
 
 
@@ -571,16 +621,6 @@ def main():
     print()
     print(f"Service: http://{HOST}:{PORT}")
     print(f"Workers: {POOL_WORKERS}")
-    @app.get("/attest", summary="Return RA-TLS quote stub for attestation")
-    async def attest_endpoint():
-        """Return a lightweight attestation stub. In production, return SGX Quote/Quote signature."""
-        # In production integrate with the SGX quoting enclave to produce a real quote.
-        quote = _b64.b64encode(b"mock-sgx-quote").decode()
-        return {
-            "mrenclave": os.environ.get("T8_EXPECTED_MRENCLAVE", "mock-mrenclave"),
-            "quote": quote,
-            "timestamp": int(time.time())
-        }
     print()
     print("Endpoints:")
     print(f"  POST   /query        - Execute medical query")

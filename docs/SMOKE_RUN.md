@@ -95,7 +95,7 @@ Danh sách thay đổi tôi đã **sửa / thêm** so với `PROJECT.md`
 - scripts/generate_mtls_certs.sh: helper tạo CA/server/client (dùng trong compose flow).
 - scripts/smoke_test.sh: helper `make smoke` (compose flow) — sinh certs, up stack, chờ health, sample query.
 - scripts/smoke_test_local.sh: helper non-Docker chạy local, tự sinh certs (SAN), tạo venv, seed (nếu có mongod), start ECALL pool với TLS và Router, test sample query. (Đã mở rộng để support `REGEN_CERTS` và `KEEP_ALIVE`.)
-- enclave/enclave/ecall_pool.py: hỗ trợ đọc env `T8_SSL_CERT`, `T8_SSL_KEY`, `T8_SSL_CA` và truyền vào `uvicorn.run(...)` để bật TLS cho service.
+- enclave/ecall_pool.py: hỗ trợ đọc env `T8_SSL_CERT`, `T8_SSL_KEY`, `T8_SSL_CA` và truyền vào `uvicorn.run(...)` để bật TLS cho service.
 - router/ecall_client.py: hỗ trợ mTLS client (`verify=ca_bundle`, `cert=(client_cert, client_key)`) và thêm fallback `requests` khi `httpx` lỗi `RemoteProtocolError` trong local run.
 - crypto/data/generate_ehr.py: làm idempotent/parametric theo env vars (MONGO_URI, counts, force recreate) để seeder phù hợp cho local runs.
 - crypto/requirements.txt: được dùng để tạo virtualenv cho local run.

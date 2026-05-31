@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 """
-Simple bipartite-linkage attack simulator (stub).
+Bipartite linkage attack evaluation for ORE age ciphertexts.
 
-This script attempts to illustrate linkage risk on an ORE-encrypted `tuoi_enc`
-column. If a real MongoDB is available it will sample ciphertext values from
-`enc2health.patient_records`. If not, it will run a small simulated experiment
-and print a short summary and JSON results file.
+This script provides a non-trivial, reproducible experiment:
+1) Synthetic experiment with known plaintext ages and simulated order-preserving
+   ciphertexts; attacker performs rank/quantile linkage from ciphertext order.
+2) Optional real-Mongo leakage profile (when Mongo is available): reports
+   uniqueness/rank leakage of `tuoi_enc` without requiring plaintext ages.
 
-This is intentionally lightweight — replace with a more rigorous attacker model
-for full evaluations.
+Outputs:
+- attack_results.json
+- attack_chart.png (if matplotlib is available)
 """
+
+from __future__ import annotations
+
 import json
+import math
+import os
 import random
-import sys
+from bisect import bisect_right
+from collections import Counter
+from pathlib import Path
+from typing import Iterable
 
 try:
     from pymongo import MongoClient
@@ -20,68 +30,187 @@ except Exception:
     MongoClient = None
 
 
-def analyze_ciphertexts(ciphertexts):
-    total = len(ciphertexts)
-    counts = {}
-    for c in ciphertexts:
-        counts[c] = counts.get(c, 0) + 1
-    unique = sum(1 for v in counts.values() if v == 1)
-    most_common = sorted(counts.items(), key=lambda x: -x[1])[:5]
-    uniqueness_ratio = unique / total if total else 0.0
+def sample_age_distribution(n: int, seed: int = 42) -> list[int]:
+    """Generate a realistic-ish age distribution for attack simulation."""
+    rng = random.Random(seed)
+    ages: list[int] = []
+    for _ in range(n):
+        p = rng.random()
+        if p < 0.12:
+            age = rng.randint(18, 30)
+        elif p < 0.42:
+            age = rng.randint(31, 45)
+        elif p < 0.78:
+            age = rng.randint(46, 65)
+        else:
+            age = rng.randint(66, 90)
+        ages.append(age)
+    return ages
+
+
+def ore_encrypt_sim(age: int, secret_offset: int = 913_271) -> int:
+    """Deterministic order-preserving stand-in for ORE ciphertext values."""
+    # Monotonic mapping: preserves order exactly.
+    return age * 10_000 + secret_offset
+
+
+def empirical_cdf(values: Iterable[int]) -> tuple[list[int], list[float]]:
+    counts = Counter(values)
+    keys = sorted(counts.keys())
+    total = float(sum(counts.values()) or 1)
+    probs: list[float] = []
+    c = 0.0
+    for k in keys:
+        c += counts[k] / total
+        probs.append(c)
+    return keys, probs
+
+
+def quantile_to_age(q: float, keys: list[int], cdf: list[float]) -> int:
+    idx = bisect_right(cdf, q)
+    if idx <= 0:
+        return keys[0]
+    if idx >= len(keys):
+        return keys[-1]
+    return keys[idx]
+
+
+def attack_rank_linkage(ciphertexts: list[int], aux_plain_ages: list[int]) -> list[int]:
+    """Infer ages from ciphertext rank + auxiliary plaintext distribution."""
+    keys, cdf = empirical_cdf(aux_plain_ages)
+
+    order = sorted(range(len(ciphertexts)), key=lambda i: ciphertexts[i])
+    inferred = [0] * len(ciphertexts)
+    n = len(ciphertexts)
+
+    for rank, original_idx in enumerate(order, start=1):
+        q = rank / (n + 1.0)
+        inferred[original_idx] = quantile_to_age(q, keys, cdf)
+
+    return inferred
+
+
+def compute_recovery_metrics(true_ages: list[int], inferred_ages: list[int]) -> dict:
+    n = len(true_ages)
+    if n == 0:
+        return {
+            "n": 0,
+            "exact_recovery_rate": 0.0,
+            "within_2_years_rate": 0.0,
+            "mae": 0.0,
+        }
+
+    exact = sum(1 for t, i in zip(true_ages, inferred_ages) if t == i)
+    near2 = sum(1 for t, i in zip(true_ages, inferred_ages) if abs(t - i) <= 2)
+    mae = sum(abs(t - i) for t, i in zip(true_ages, inferred_ages)) / n
+
     return {
-        "total_samples": total,
-        "unique_count": unique,
-        "uniqueness_ratio": uniqueness_ratio,
-        "most_common": most_common,
+        "n": n,
+        "exact_recovery_rate": round(exact / n, 4),
+        "within_2_years_rate": round(near2 / n, 4),
+        "mae": round(mae, 4),
     }
 
 
-def run_against_mongo(uri="mongodb://127.0.0.1:27017", limit=500):
-    client = MongoClient(uri, serverSelectionTimeoutMS=2000)
-    db = client.get_database("enc2health")
-    coll = db.get_collection("patient_records")
-    cursor = coll.find({}, {"tuoi_enc": 1}, limit=limit)
-    cts = []
-    for d in cursor:
-        if "tuoi_enc" in d and d["tuoi_enc"] is not None:
-            # stringify to make hashable
-            cts.append(str(d["tuoi_enc"]))
-    return analyze_ciphertexts(cts)
+def run_synthetic_attack(n: int = 5000, seed: int = 42) -> dict:
+    true_ages = sample_age_distribution(n, seed=seed)
+
+    # Attacker sees only ciphertexts produced by an order-preserving scheme.
+    cts = [ore_encrypt_sim(a) for a in true_ages]
+
+    # Auxiliary data: external demographic age distribution (different seed).
+    aux = sample_age_distribution(n * 2, seed=seed + 99)
+
+    inferred = attack_rank_linkage(cts, aux)
+    metrics = compute_recovery_metrics(true_ages, inferred)
+    metrics["experiment"] = "synthetic_rank_linkage"
+    metrics["ore_order_leakage"] = True
+    return metrics
 
 
-def run_simulation(n=500):
-    # Simulate an ORE encoding where values preserve order but are not unique.
-    # For the stub we map actual ages to a deterministic pseudo-ciphertext.
-    ages = [random.randint(18, 90) for _ in range(n)]
-    cts = [f"ORE#{a + (random.randrange(0,3))}" for a in ages]
-    return analyze_ciphertexts(cts)
+def run_mongo_leakage_profile(uri: str = "mongodb://127.0.0.1:27017") -> dict:
+    if MongoClient is None:
+        return {"available": False, "reason": "pymongo missing"}
+
+    try:
+        client = MongoClient(uri, serverSelectionTimeoutMS=2000)
+        coll = client["enc2health"]["patient_records"]
+        docs = list(coll.find({}, {"tuoi_enc": 1}, limit=10_000))
+        cts = [str(d.get("tuoi_enc")) for d in docs if d.get("tuoi_enc") is not None]
+        n = len(cts)
+        if n == 0:
+            return {"available": True, "n": 0, "note": "no tuoi_enc records"}
+
+        counts = Counter(cts)
+        unique = sum(1 for v in counts.values() if v == 1)
+        top = counts.most_common(10)
+
+        return {
+            "available": True,
+            "n": n,
+            "unique_ratio": round(unique / n, 4),
+            "top_ciphertext_frequencies": top,
+            "note": "real plaintext age labels unavailable; reporting leakage profile only",
+        }
+    except Exception as exc:
+        return {"available": False, "reason": str(exc)}
 
 
-def main():
-    out = {"source": None}
-    if MongoClient is not None:
-        try:
-            print("Attempting to connect to MongoDB at mongodb://127.0.0.1:27017 ...")
-            res = run_against_mongo(limit=1000)
-            out.update(res)
-            out["source"] = "mongo_sample"
-        except Exception as e:
-            print("MongoDB unavailable, running simulated experiment:", e)
-            res = run_simulation(500)
-            out.update(res)
-            out["source"] = "simulated"
+def maybe_render_chart(results: dict, png_path: Path) -> bool:
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        return False
+
+    syn = results.get("synthetic_attack", {})
+    exact = syn.get("exact_recovery_rate", 0.0)
+    near2 = syn.get("within_2_years_rate", 0.0)
+    mae = syn.get("mae", 0.0)
+
+    plt.figure(figsize=(8, 4))
+    plt.subplot(1, 2, 1)
+    plt.bar(["exact", "within±2y"], [exact, near2])
+    plt.ylim(0, 1)
+    plt.title("Recovery rates")
+
+    plt.subplot(1, 2, 2)
+    plt.bar(["MAE"], [mae])
+    plt.title("Mean absolute error")
+
+    plt.tight_layout()
+    plt.savefig(png_path)
+    plt.close()
+    return True
+
+
+def main() -> int:
+    n = int(os.environ.get("ATTACK_SYNTHETIC_N", "5000"))
+    seed = int(os.environ.get("ATTACK_SYNTHETIC_SEED", "42"))
+
+    synthetic = run_synthetic_attack(n=n, seed=seed)
+    mongo_profile = run_mongo_leakage_profile()
+
+    results = {
+        "synthetic_attack": synthetic,
+        "mongo_leakage_profile": mongo_profile,
+        "conclusion": "Order leakage enables rank-based linkage; strict TEE path avoids exposing plaintext ages.",
+    }
+
+    out_json = Path("attack_results.json")
+    out_png = Path("attack_chart.png")
+    out_json.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    chart_ok = maybe_render_chart(results, out_png)
+
+    print("Bipartite attack evaluation complete")
+    print(json.dumps(results, indent=2))
+    print(f"Wrote: {out_json}")
+    if chart_ok:
+        print(f"Wrote: {out_png}")
     else:
-        print("pymongo not installed; running simulated experiment.")
-        res = run_simulation(500)
-        out.update(res)
-        out["source"] = "simulated"
+        print("Skipped chart generation (matplotlib unavailable)")
 
-    print("\nBipartite linkage attack (stub) summary:")
-    print(json.dumps(out, indent=2))
-    with open("attack_bipartite_result.json", "w") as f:
-        json.dump(out, f, indent=2)
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

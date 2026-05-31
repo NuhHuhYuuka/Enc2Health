@@ -4,7 +4,7 @@
 > **Kiến trúc:** D — Hybrid Adaptive (Software DTE/ORE ⇄ TEE SGX Enclave, fallback tự động khi EPC bão hòa)
 > **Môn:** NT219.Q2.ANTT
 > **Mô hình đe dọa:** honest-but-curious cloud admin / CSP quan sát được RAM & OS-level
-> **Cập nhật:** 2026-05-30
+> **Cập nhật:** 2026-05-31
 
 Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ ĐÃ DONE** và **🚧 IN DEV**, kèm phần đánh giá *cái gì còn thiếu* và *ý tưởng làm tiếp*.
 
@@ -69,7 +69,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
 | TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` (mock) + `enclave_service.py` (DuckDB real) | ⚠️ Router-side xong; Pool cần nhận `ciphertexts` (Lan) |
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` + `router/resource_monitor.py` | ✅ logic + đọc RSS/EPC thật từ `/proc` |
-| Router lấy DEK từ Vault sau RA-TLS | `ecall_client.py` (`/attest` stub) + `vault_client.py` | 🚧 RA-TLS là stub `mock-sgx-quote` |
+| Router lấy DEK từ Vault sau RA-TLS | `ecall_client.py` + `vault_client.py` | ⚠️ Attestation đang ở chế độ signed simulation (HMAC + freshness), chưa phải SGX quote/DCAP thật |
 | Đánh giá hiệu năng overhead < 2x | `tests/benchmark.py` (TEE ~2x Software) | ✅ |
 | q-leakage đo rò rỉ khi fallback | `tests/leakage.py` + `tests/attack_bipartite.py` | ✅ tách được TEE/RBAC masked vs software fallback raw |
 | Grafana real-time | `enclave/monitoring/` (Prometheus + Grafana + exporter) | ✅ |
@@ -97,8 +97,8 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Auth JWT** — `common/auth.py` + `router/auth.py`: HS256 Bearer, iss/aud, `generate_test_jwt`; fallback `INTERNAL_AUTH_TOKEN`.
 - ✅ **Probing (T5)** — `router/probing.py`: thread probe mỗi 5s, lock baseline sau 3 lần, phát hiện latency ≥ 2× baseline.
 - ✅ **Adaptive Controller (T6)** — `router/adaptive.py`: state machine NORMAL ⇄ FALLBACK với **hysteresis** (fallback ≥80%, restore ≤60% chống flapping), núm mô phỏng áp lực (`set_simulated_pressure` + `/adaptive/simulate`), switch log có pressure/nguồn, endpoint `/adaptive`.
-- ✅ **ECALL client (T9)** — `router/ecall_client.py`: HTTP client tới pool, JWT Bearer tự sinh, hỗ trợ mTLS cert + `/attest` check MRENCLAVE, fallback `httpx`→`requests` khi mTLS lỗi; **`query(..., ciphertexts=...)` đẩy kèm bản mã vào enclave** (TEE path).
-- ✅ **Software Executor** — `router/software_executor.py`: SOFTWARE/fallback path query MongoDB ciphertext thật — mã hóa điều kiện bằng DTE (`ma_benh`) + ORE (`tuoi` range), giải mã viện phí AES-GCM để SUM/AVG/COUNT; tự fallback in-memory khi không có MongoDB. **`fetch_vien_phi_ciphertexts(filters)`** gom bản mã cho Router đẩy sang enclave.
+- ✅ **ECALL client (T9)** — `router/ecall_client.py`: HTTP client tới pool, JWT Bearer tự sinh, hỗ trợ mTLS cert + `/attest` verification (MRENCLAVE + chữ ký HMAC + freshness), fallback `httpx`→`requests` khi mTLS lỗi; **`query(..., ciphertexts=...)` đẩy kèm bản mã vào enclave** (TEE path).
+- ✅ **Software Executor** — `router/software_executor.py`: SOFTWARE/fallback path query MongoDB ciphertext thật — mã hóa điều kiện bằng DTE (`ma_benh`) + ORE (`tuoi` range), giải mã viện phí AES-GCM để SUM/AVG/COUNT. **Strict mode:** `SOFTWARE_STRICT_MODE=1` sẽ fail-fast, không rơi về dữ liệu giả. `fetch_vien_phi_ciphertexts(filters)` gom bản mã cho Router đẩy sang enclave.
 - ✅ **Resource Monitor** — `router/resource_monitor.py`: đọc RSS thật từ `/proc/<pid>/status`, dò EPC từ `/proc/<pid>/smaps` (best-effort), ghi snapshot JSON; thay cho công thức nội suy RSS cũ.
 - ✅ **Main service** — `router/main.py`: FastAPI :8000, `/query` `/health` `/adaptive` `/metrics`, tích hợp đủ T1/T2/T4/T6/T9; SOFTWARE mode gọi `software_executor` (đã bỏ placeholder), JWT Bearer bắt buộc.
 - ✅ **Smoke run mTLS local** — `Makefile` (`make smoke-local`), `scripts/smoke_test_local.sh`, `scripts/generate_jwt.py`, `docs/SMOKE_RUN.md`: chạy 1 lệnh dựng cả Pool+Router qua TLS, smoke pass.
@@ -108,15 +108,15 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### 3.3. TEE Enclave & Observability — Lan (`enclave/`)
 > ⚠️ Folder `enclave/` đã được gỡ khỏi git (quá nặng) và `.gitignore`; Lan chia sẻ qua Google Drive. Các đường dẫn dưới đây trỏ tới cây thư mục local của Lan, không có trên GitHub.
-- ✅ **ECALL Task Pool (T8)** — `enclave/enclave/ecall_pool.py`: FastAPI :9091, ThreadPool 8 workers, index theo ma_benh/tuoi/khoa, JWT bắt buộc, `/attest` stub.
-- ✅ **Enclave service (DuckDB)** — `enclave/enclave/enclave_service.py`: DuckDB in-memory + AES-GCM decrypt (register-safe, zero-fill).
+- ✅ **ECALL Task Pool (T8)** — `enclave/ecall_pool.py`: FastAPI :9091, ThreadPool 8 workers, index theo ma_benh/tuoi/khoa, JWT bắt buộc, `/attest` signed simulation + strict mode (`T8_STRICT_MODE`).
+- ✅ **Enclave service (DuckDB)** — `enclave/enclave_service.py`: DuckDB in-memory + AES-GCM decrypt (register-safe, zero-fill).
 - ✅ **Gramine SGX manifest** — `enclave/T1_gramine/duckdb_real.manifest(.sgx)`: trusted_files có SHA-256, enclave 128M, binary DuckDB ký thật.
 - ✅ **T3 — AES-GCM C benchmark** — `enclave/T3/T3_aes_gcm_benchmark.c` (register vs RAM mode).
 - ✅ **T4 — OpenSSL AES-NI microbench** — `enclave/T4/` + `T4_results/` (rsa4096, ecdsap384, aes256gcm; host vs enclave).
-- ✅ **Spectre/side-channel mitigation** — `enclave/enclave/spectre_mitig.py`, `aes_register_safe.py`.
+- ✅ **Spectre/side-channel mitigation** — `enclave/spectre_mitig.py`, `enclave/aes_register_safe.py`.
 - ✅ **mTLS / RA-TLS scaffolding** — `enclave/certs/` (CA, server, client, vault, enclave certs), `scripts/generate_mtls_certs.sh`.
 - ✅ **Observability (T10)** — `enclave/monitoring/`: Prometheus config, exporter (epc_pressure, asym_latency, aes_throughput, key_retrieve), Grafana dashboard JSON + provisioning, docker-compose.
-- ✅ **Vault key sender/receiver** — `enclave/enclave/vault_key_sender.py`, `key_receiver.py`, `T2_mock_vault.py`.
+- ✅ **Vault key sender/receiver** — `enclave/vault_key_sender.py`, `enclave/key_receiver.py`, `enclave/T2_mock_vault.py`.
 - ✅ **HIPAA audit log** — `enclave/hipaa_audit.log`.
 
 ### 3.4. Tests & Benchmark (chung)
@@ -126,7 +126,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Benchmark 3 mode (T11)** — `tests/benchmark.py` → `benchmark_results.json` (TEE ~2× Software).
 - ✅ **Concurrent clients (T12)** — `tests/benchmark_concurrent.py` (1→5→10→20→50, 0% error) → `concurrent_results.json`.
 - ✅ **q-leakage entropy (T13)** — `tests/leakage.py` → `leakage_results.json`.
-- ✅ **Bipartite Matching Attack (T13)** — `tests/attack_bipartite.py` (DTE 50% value recovery, TEE 0%) → `attack_results.json` + `attack_chart.png`.
+- ✅ **Bipartite Matching Attack (T13)** — `tests/attack_bipartite.py`: rank-linkage evaluation có metric phục hồi (`exact_recovery_rate`, `within_2_years_rate`, `mae`) → `attack_results.json` + `attack_chart.png` (nếu có matplotlib).
 - ✅ **Plot tổng hợp (T14)** — `tests/plot_results.py` → `enc2health_benchmark.png`.
 
 ---
@@ -145,10 +145,10 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **q-leakage đã phân biệt TEE vs Fallback.** `tests/leakage.py` giờ ghi riêng `TEE_mode_researcher_masked` và `SOFTWARE_fallback_researcher_raw`, nên `leakage_results.json` đã cho thấy output exposure tăng rõ khi fallback.
 
 ### 4.3. 🟡 Tính nhất quán & dữ liệu
-- 🚧 **Mã bệnh không khớp.** Crypto dùng ICD-10 (`E11`, `I10`…); enclave mock dùng `DTE001..DTE006`. → Thống nhất ICD-10 thật xuyên suốt.
+- ✅ **Mã bệnh ICD-10 đã đồng bộ mặc định.** Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
 - ✅ **Probe RSS/EPC thật (best-effort).** `router/resource_monitor.py` đọc RSS thật từ `/proc/<pid>/status`, cố gắng nhận diện EPC từ `/proc/<pid>/smaps`, và `router/probing.py` đẩy snapshot ra `/metrics` / file JSON.
 - 🚧 **DBMS chưa thống nhất.** Kịch bản + README + `generate_ehr.py` = **MongoDB**; ảnh topology ghi **Postgres/CockroachDB**. → Chốt MongoDB, sửa lại ảnh topology cho khớp.
-- ✅ **Fallback đã dùng đúng cột ORE/DTE.** Khi Adaptive chuyển TEE→SOFTWARE, `main.py` gọi `software_executor` query cột DTE (`ma_benh_enc`) + ORE (`tuoi_enc`) trên MongoDB. ⚠️ Mã bệnh alias `DTE001..006`→ICD-10 trong `software_executor.ICD10_ALIASES` vẫn cần thống nhất với data thật (xem mục mã bệnh ở trên).
+- ✅ **Fallback đã dùng đúng cột ORE/DTE.** Khi Adaptive chuyển TEE→SOFTWARE, `main.py` gọi `software_executor` query cột DTE (`ma_benh_enc`) + ORE (`tuoi_enc`) trên MongoDB. Với `SOFTWARE_STRICT_MODE=1`, lỗi hạ tầng sẽ fail-fast thay vì rơi về mock.
 
 ### 4.4. 🟢 Phần chưa có / nâng cao (nice-to-have)
 - 🚧 **HL7 FHIR ingest thật** — hiện chỉ có schema, chưa parse FHIR Document.
@@ -163,7 +163,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### Sprint 1 — "Nối dây" E2E thật (xương sống của đồ án)
 1. ✅ **`router/software_executor.py`** — đã nối MongoDB ciphertext path cho SOFTWARE mode.
-2. ✅ **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` → ingest vào DuckDB in-memory → `AVG/SUM` (implemented in `enclave/enclave/ecall_pool.py`).
+2. ✅ **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` → ingest vào DuckDB in-memory → `AVG/SUM` (implemented in `enclave/ecall_pool.py`).
 3. ✅ **Load key vào pool lúc startup** — Pool cố gắng lấy DEK từ Vault nếu có, và fallback về local key files; `/health` phản ánh `keys_loaded`.
 4. **Thống nhất ICD-10** trong cả mock lẫn data thật. ✅ `test_e2e.py` đã được viết lại: verify kết quả Router so với truy vấn MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa chạy — không còn hard-code `n_records == 5`.
 
@@ -206,7 +206,7 @@ REGEN_CERTS=1 KEEP_ALIVE=0 make smoke-local
 
 # Hoặc chạy tay 2 terminal (nếu cần)
 # Terminal 1 — ECALL Task Pool (TLS)
-T8_SSL_CERT=certs/server.crt T8_SSL_KEY=certs/server.key T8_SSL_CA=certs/ca.crt python3 enclave/enclave/ecall_pool.py
+T8_SSL_CERT=certs/server.crt T8_SSL_KEY=certs/server.key T8_SSL_CA=certs/ca.crt python3 enclave/ecall_pool.py
 
 # Terminal 2 — Query Router
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
@@ -241,6 +241,7 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 - `tests/test_router.py`: 30/30 passed ✅
 - `tests/test_e2e.py`: 7/7 passed against live stack ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
+- `tests/attack_bipartite.py`: rank-linkage evaluation generated `attack_results.json` ✅
 - `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅

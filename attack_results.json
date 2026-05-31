@@ -1,0 +1,15 @@
+{
+  "synthetic_attack": {
+    "n": 5000,
+    "exact_recovery_rate": 0.5846,
+    "within_2_years_rate": 1.0,
+    "mae": 0.4484,
+    "experiment": "synthetic_rank_linkage",
+    "ore_order_leakage": true
+  },
+  "mongo_leakage_profile": {
+    "available": false,
+    "reason": "pymongo missing"
+  },
+  "conclusion": "Order leakage enables rank-based linkage; strict TEE path avoids exposing plaintext ages."
+}

@@ -27,6 +27,7 @@ DEFAULT_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
 KEY_DIR = Path(os.environ.get("ENC2HEALTH_KEY_DIR", REPO_ROOT / "crypto" / "data" / "keys"))
 # Expect clients to provide real ICD-10 codes (e.g., "E11").
 ICD10_ALIASES = {}
+STRICT_MODE = os.environ.get("SOFTWARE_STRICT_MODE", "0") == "1"
 
 
 @dataclass
@@ -52,6 +53,8 @@ class SoftwareExecutor:
         self._ore = self._load_ore_cipher("ore.key")
         self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
         self._mongo_available = self._detect_mongo_available()
+        if STRICT_MODE and not self._mongo_available:
+            raise RuntimeError("SOFTWARE_STRICT_MODE=1 but MongoDB is unavailable")
 
     def _load_dte_cipher(self, filename: str) -> DTECipher | None:
         path = KEY_DIR / filename
@@ -180,15 +183,21 @@ class SoftwareExecutor:
         Trả về [] nếu MongoDB không khả dụng (router sẽ quay về luồng pool cũ).
         """
         if not self._mongo_available:
+            if STRICT_MODE:
+                raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids ciphertext fallback without MongoDB")
             return []
         try:
             rows = self._query_mongo_records(filters)
             return [row["vien_phi_enc"] for row in rows if row.get("vien_phi_enc")]
         except Exception:
+            if STRICT_MODE:
+                raise
             return []
 
     def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
         if not self._mongo_available:
+            if STRICT_MODE:
+                raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids mock fallback path")
             return self._fallback_aggregate(query_type, filters)
 
         try:
@@ -208,6 +217,8 @@ class SoftwareExecutor:
                 raise ValueError(f"Unknown query type: {query_type}")
             return SoftwareQueryResult(result=float(aggregate), n_records=n_records)
         except Exception:
+            if STRICT_MODE:
+                raise
             return self._fallback_aggregate(query_type, filters)
 
     def _detect_mongo_available(self) -> bool:
@@ -219,12 +230,16 @@ class SoftwareExecutor:
 
     def count(self, filters: Dict[str, Any]) -> SoftwareQueryResult:
         if not self._mongo_available:
+            if STRICT_MODE:
+                raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids mock fallback path")
             n_records = self._fallback_count(filters)
         else:
             query = self._build_filter(filters)
             try:
                 n_records = self.collection.count_documents(query)
             except Exception:
+                if STRICT_MODE:
+                    raise
                 n_records = self._fallback_count(filters)
         return SoftwareQueryResult(result=float(n_records), n_records=n_records)
 

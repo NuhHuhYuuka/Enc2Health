@@ -67,7 +67,7 @@ services:
       T8_SSL_CERT: /certs/server.crt
       T8_SSL_KEY: /certs/server.key
       T8_SSL_CA: /certs/ca.crt
-    command: ["python", "enclave/enclave/ecall_pool.py"]
+    command: ["python", "enclave/ecall_pool.py"]
     ports:
       - "9091:9091"
     volumes:

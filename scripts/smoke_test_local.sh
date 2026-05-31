@@ -155,7 +155,7 @@ fi
 echo "[smoke-local] starting ecall task pool (with TLS, data_mode=$EFFECTIVE_DATA_MODE)"
 T8_POOL_HOST=127.0.0.1 T8_POOL_PORT=9091 T8_POOL_DATA_MODE="$EFFECTIVE_DATA_MODE" MONGO_URI=${MONGO_URI} \
   T8_SSL_CERT="$T8_SSL_CERT" T8_SSL_KEY="$T8_SSL_KEY" T8_SSL_CA="$T8_SSL_CA" \
-  "$VENV_PY" enclave/enclave/ecall_pool.py &
+  "$VENV_PY" enclave/ecall_pool.py &
 ECALL_PID=$!
 
 echo "[smoke-local] starting router (uvicorn)"

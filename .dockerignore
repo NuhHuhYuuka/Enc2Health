@@ -11,8 +11,6 @@ __pycache__
 build/
 enclave/build/
 enclave/duckdb_build_noglibc/
-enclave/enclave/build/
-enclave/enclave/duckdb_build_noglibc/
 node_modules/
 dist/
 .pytest_cache/
