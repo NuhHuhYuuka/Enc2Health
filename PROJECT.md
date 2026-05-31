@@ -18,7 +18,7 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 | Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + đẩy ciphertext sang TEE |
 | TEE Enclave + Observability (Gramine simulation, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Pool giải mã AES-GCM từ ciphertext + DuckDB in-memory; giải mã ECC PII theo khoa; attestation ở chế độ signed simulation |
 
-> **🎉 CỘT MỐC — E2E 3 bên đã VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **7/7 PASSED** trên stack live (MongoDB + ECALL Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`). Kết quả TEE của Router **khớp chính xác** giá trị giải mã từ Mongo → chứng minh luồng *Client → Router (gom `vien_phi_enc`) → Pool (giải mã AES-GCM trong enclave) → DuckDB (SUM/AVG) → 1 con số* hoạt động trên 10k record mã hóa thật, CSP chỉ thấy ciphertext.
+> **🎉 CỘT MỐC — E2E 3 bên đã VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **10/10 PASSED** trên stack live (MongoDB + Vault + ECALL Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`). Kết quả TEE của Router **khớp chính xác** giá trị giải mã từ Mongo; luồng PII cũng chạy thật: *Router lấy `pii_enc` → Pool lấy private key khoa từ Vault → ECC decrypt trong Pool/TEE → Router RBAC/ABAC mask*.
 >
 > **Còn lại (nâng cao):** attestation hiện là **signed simulation** (HMAC + freshness) — production SGX/DCAP + RA-TLS vẫn là bước tiếp theo; mTLS bật-mặc-định, docker-compose 1 lệnh, sửa ảnh topology (xem §4.4, §5).
 
@@ -126,8 +126,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### 3.4. Tests & Benchmark (chung)
 - ✅ **Unit tests (T3)** — `tests/test_router.py` (Router/RBAC/Cost Model).
-- ✅ **E2E tests (T10)** — `tests/test_e2e.py` (7 ca: full flow, mask, 403, software mode, filter) — verify đối chiếu MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa live.
-- ✅ **PII E2E tests added** — `tests/test_e2e.py` thêm 3 ca: doctor đúng khoa thấy PII, researcher bị mask, doctor sai khoa bị 403. Cần stack live + dataset đã reseed có `pii_enc` để chạy thật; latest local run skipped vì Router/Pool chưa bật.
+- ✅ **E2E tests (T10)** — `tests/test_e2e.py` **10/10 PASSED live**: 7 ca aggregate/mask/403/software/filter đối chiếu MongoDB thật (DTE+ORE+GCM) + 3 ca PII (doctor đúng khoa thấy PII, researcher bị mask, doctor sai khoa bị 403).
 - ✅ **EPC saturation (T7)** — `tests/test_adaptive.py` (live endpoint + `/adaptive/simulate` fallback/restore).
 - ✅ **Benchmark 3 mode (T11)** — `tests/benchmark.py` → `benchmark_results.json` (TEE ~2× Software).
 - ✅ **Concurrent clients (T12)** — `tests/benchmark_concurrent.py` (1→5→10→20→50, 0% error) → `concurrent_results.json`.
@@ -251,14 +250,14 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 ## RECENT RUNS (2026-05-31)
 
 - `tests/test_router.py`: 33/33 passed after PII route/RBAC/fetch coverage ✅
-- `tests/test_e2e.py`: 7/7 passed against live stack ✅
+- `tests/test_e2e.py`: 10/10 passed against live Mongo + Vault + Pool + Router stack ✅
 - `tests/test_e2e.py` (Vault verify run): 7/7 PASSED with `T8_ALLOW_LOCAL_KEY_FALLBACK=0`; Pool log shows `DEK source: vault` ✅
 - `tests/test_e2e.py` (full stack: MongoDB thật + Vault): 7/7 PASSED, `T8_ALLOW_LOCAL_KEY_FALLBACK=0` ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
 - `tests/attack_bipartite.py`: rank-linkage evaluation generated `attack_results.json` ✅
 - `make smoke-local`: local end-to-end mTLS smoke pass với Mongo + Router + Pool ✅
 - `tests/test_adaptive.py`: live adaptive endpoint verified via `/adaptive/simulate` fallback/restore ✅
-- `tests/test_e2e.py`: PII cases added (doctor sees PII, researcher masked, wrong-dept 403); latest local run skipped because Router/Pool stack was not live ⚠️
+- `tests/test_e2e.py` (PII decrypt path): 3/3 PII cases PASSED live — doctor sees PII, researcher masked, wrong-dept 403; Pool loaded private keys from Vault ✅
 - `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅

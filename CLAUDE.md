@@ -81,14 +81,14 @@ python3 crypto/data/generate_ehr.py
 - ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
 - ✅ **Mắt xích đã hoàn thành (phía Lan):** Pool đã nhận `ciphertexts`, giải mã AES-GCM trong enclave và thực thi aggregate trên DuckDB in-memory (không còn phụ thuộc `MOCK_PATIENT_DATA` cho luồng này). Attestation hiện là signed simulation; Vault runtime đã ưu tiên AppRole + Vault Transit unwrap DEK, còn local key fallback chỉ là cờ dev. (Xem PROJECT.md §4, §5.5.)
 - ✅ **Luồng PII thật đã nối:** `get_patient`/`lookup_patient` luôn route TEE; Router lấy `pii_enc` + `dept` từ Mongo, Pool lấy private key theo khoa từ Vault (local fallback chỉ khi bật cờ dev), giải mã ECC P-384 trong Pool, Router áp RBAC/ABAC mask (`doctor/admin` full, `admin_staff` che CMND/địa chỉ, `researcher` masked). Generator tạo `pii_enc` gom JSON PII và tự sửa keypair khoa bị lệch public/private khi reseed.
-- 🎉 **E2E 3 bên VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **7/7 PASSED** trên stack live (Mongo + Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`, cùng `AUTH_JWT_SECRET`). Kết quả TEE của Router khớp chính xác giá trị giải mã từ Mongo → 3 phần Long+Lan+Nam đã liên kết end-to-end. Cách chạy: bật Mongo → `FORCE_RECREATE=1 generate_ehr.py` → Pool → Router(`ROUTER_TEE_PUSH_CIPHERTEXT=1`) → `AUTH_JWT_SECRET=... pytest tests/test_e2e.py`. (Lưu ý: pytest phải có `AUTH_JWT_SECRET` trong env vì `common/auth` đọc lúc import.)
+- 🎉 **E2E 3 bên VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **10/10 PASSED** trên stack live (Mongo + Vault + Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`, cùng `AUTH_JWT_SECRET`). Bao gồm 7 test aggregate cũ + 3 test PII mới: doctor đúng khoa thấy PII, researcher masked, doctor sai khoa 403. Pool log xác nhận `DEK source: vault` và `Loaded private key from Vault` cho `/query/pii`. Cách chạy: bật Mongo/Vault → `EHR_FORCE_RECREATE=1 generate_ehr.py` → `bash crypto/vault/setup_vault.sh` → Pool(`T8_ALLOW_LOCAL_KEY_FALLBACK=0`) → Router(`ROUTER_TEE_PUSH_CIPHERTEXT=1`) → `AUTH_JWT_SECRET=... pytest tests/test_e2e.py -v`.
 
 > Khi sửa code làm thay đổi các mục trên: nhớ cập nhật **cả PROJECT.md và CLAUDE.md**.
 
 ## Recent runs (2026-05-31)
 
 - `tests/test_router.py`: 33/33 passed after PII route/RBAC/fetch tests ✅
-- `tests/test_e2e.py`: 7/7 passed against live stack ✅
+- `tests/test_e2e.py`: 10/10 passed against live Mongo + Vault + Pool + Router stack ✅
 - `tests/test_e2e.py` (Vault verify run): 7/7 PASSED with `T8_ALLOW_LOCAL_KEY_FALLBACK=0`; Pool log shows `DEK source: vault` ✅
 - `tests/test_e2e.py` (full stack: MongoDB thật + Vault): 7/7 PASSED, `T8_ALLOW_LOCAL_KEY_FALLBACK=0` ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
@@ -98,6 +98,6 @@ python3 crypto/data/generate_ehr.py
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅
 - `tests/test_adaptive.py`: live adaptive endpoint verified via `/adaptive/simulate` fallback/restore ✅
-- `tests/test_e2e.py`: PII cases added (doctor sees PII, researcher masked, wrong-dept 403); latest local run skipped because Router/Pool stack was not live ⚠️
+- `tests/test_e2e.py` (PII decrypt path): 3/3 PII cases PASSED live — doctor sees PII, researcher masked, wrong-dept 403; Pool loaded private keys from Vault ✅
 
 Note: these runs were executed locally (non-Docker) with MongoDB seeded from `crypto/data/generate_ehr.py`.

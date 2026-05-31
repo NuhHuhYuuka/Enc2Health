@@ -10,7 +10,7 @@
 
 | Hạng mục | Kết quả |
 |---|---|
-| **E2E 3 bên** `tests/test_e2e.py` | **7/7 PASSED** trên stack live (Mongo + Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`) |
+| **E2E 3 bên** `tests/test_e2e.py` | **10/10 PASSED** trên stack live (Mongo + Vault + Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`) |
 | Router unit `tests/test_router.py` | **33/33 PASSED** |
 | Kết quả TEE của Router | **Khớp chính xác** giá trị giải mã trực tiếp từ Mongo (sum/avg) |
 
@@ -23,8 +23,8 @@
 | Hạng mục | Kết quả |
 |---|---|
 | Unit/router coverage | `tests/test_router.py` **33/33 PASSED** sau khi thêm route PII, RBAC mask, fetch PII ciphertext |
-| E2E PII cases | Đã thêm 3 case: doctor đúng khoa thấy PII, researcher masked, doctor sai khoa 403 |
-| Latest local E2E run | `tests/test_e2e.py` **10 skipped** vì Router/Pool stack không live trong lần chạy này |
+| E2E PII cases | **3/3 PASSED live**: doctor đúng khoa thấy PII, researcher masked, doctor sai khoa 403 |
+| Vault evidence | Pool log có `DEK source: vault` và `Loaded private key from Vault` khi xử lý `/query/pii` |
 
 Ghi chú: để verify live PII path cần reseed dataset để có `pii_enc`: `EHR_FORCE_RECREATE=1 python3 crypto/data/generate_ehr.py`, upload lại keypair vào Vault bằng `crypto/vault/setup_vault.sh`, rồi chạy Router/Pool như các E2E hiện có.
 
