@@ -14,11 +14,13 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 
 | Trụ cột | Người | Chạy độc lập | Tích hợp runtime |
 |---|---|---|---|
-| Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | 🚧 Chưa nối vào luồng query thật |
-| Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + Router-side đẩy ciphertext sang TEE (chờ Pool nhận) |
-| TEE Enclave + Observability (Gramine simulation, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Enclave giải mã AES-GCM từ ciphertext (Pool) + DuckDB in-memory; attestation ở chế độ signed simulation |
+| Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | ✅ Nối vào luồng query thật (Mongo ciphertext + 1 bộ key chung) |
+| Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + đẩy ciphertext sang TEE |
+| TEE Enclave + Observability (Gramine simulation, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Pool giải mã AES-GCM từ ciphertext + DuckDB in-memory; attestation ở chế độ signed simulation |
 
-> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass. Phần TEE đã được nối dây cơ bản: Router có thể đẩy `vien_phi_enc` → Pool nhận ciphertexts, Pool giải mã AES-GCM và chạy aggregate trên DuckDB in-memory. Attestation hiện là **signed simulation** (HMAC + freshness), còn production SGX/DCAP và Vault integration vẫn là bước tiếp theo.
+> **🎉 CỘT MỐC — E2E 3 bên đã VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **7/7 PASSED** trên stack live (MongoDB + ECALL Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`). Kết quả TEE của Router **khớp chính xác** giá trị giải mã từ Mongo → chứng minh luồng *Client → Router (gom `vien_phi_enc`) → Pool (giải mã AES-GCM trong enclave) → DuckDB (SUM/AVG) → 1 con số* hoạt động trên 10k record mã hóa thật, CSP chỉ thấy ciphertext.
+>
+> **Còn lại (nâng cao):** attestation hiện là **signed simulation** (HMAC + freshness) — production SGX/DCAP + Vault runtime integration vẫn là bước tiếp theo; mTLS bật-mặc-định, docker-compose 1 lệnh, sửa ảnh topology (xem §4.4, §5).
 
 ---
 

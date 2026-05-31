@@ -80,6 +80,7 @@ python3 crypto/data/generate_ehr.py
 - ✅ Crypto/KMS: DTE/ORE/GCM/ECC, Vault, KMS API, generate_ehr.
 - ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
 - ✅ **Mắt xích đã hoàn thành (phía Lan):** Pool đã nhận `ciphertexts`, giải mã AES-GCM trong enclave và thực thi aggregate trên DuckDB in-memory (không còn phụ thuộc `MOCK_PATIENT_DATA` cho luồng này). Attestation hiện là signed simulation; Vault production integration vẫn cần hoàn thiện. (Xem PROJECT.md §4, §5.5.)
+- 🎉 **E2E 3 bên VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **7/7 PASSED** trên stack live (Mongo + Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`, cùng `AUTH_JWT_SECRET`). Kết quả TEE của Router khớp chính xác giá trị giải mã từ Mongo → 3 phần Long+Lan+Nam đã liên kết end-to-end. Cách chạy: bật Mongo → `FORCE_RECREATE=1 generate_ehr.py` → Pool → Router(`ROUTER_TEE_PUSH_CIPHERTEXT=1`) → `AUTH_JWT_SECRET=... pytest tests/test_e2e.py`. (Lưu ý: pytest phải có `AUTH_JWT_SECRET` trong env vì `common/auth` đọc lúc import.)
 
 > Khi sửa code làm thay đổi các mục trên: nhớ cập nhật **cả PROJECT.md và CLAUDE.md**.
 
