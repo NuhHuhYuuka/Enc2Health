@@ -165,6 +165,8 @@ curl -X POST http://localhost:8000/query \
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"DTE001"},"role":"researcher"}'
+   -H "Content-Type: application/json" \
+   -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"E11"},"role":"researcher"}'
 
 # Doctor query COUNT → Software mode
 curl -X POST http://localhost:8000/query \

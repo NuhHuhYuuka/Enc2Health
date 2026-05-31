@@ -1,0 +1,117 @@
+[loader]
+entrypoint.uri = "file:{{ gramine.libos }}"
+# Increase verbosity to capture runtime errors during debugging
+log_level = "debug"
+insecure__use_cmdline_argv = true
+
+[libos]
+entrypoint = "/duckdb_real"
+
+[loader.env]
+LD_LIBRARY_PATH = "/lib:/lib64:/usr/lib/x86_64-linux-gnu"
+
+[[fs.mounts]]
+path = "/lib"
+uri = "file:{{ gramine.runtimedir() }}"
+
+[[fs.mounts]]
+path = "/lib64"
+uri = "file:/lib64"
+
+[[fs.mounts]]
+path = "/lib/ld-linux-x86-64.so.2"
+uri = "file:/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"
+
+[[fs.mounts]]
+path = "/lib/x86_64-linux-gnu"
+uri = "file:/lib/x86_64-linux-gnu"
+
+[[fs.mounts]]
+path = "/lib/libc.so.6"
+uri = "file:/lib/x86_64-linux-gnu/libc.so.6"
+
+[[fs.mounts]]
+path = "/lib/libdl.so.2"
+uri = "file:/lib/x86_64-linux-gnu/libdl.so.2"
+
+[[fs.mounts]]
+path = "/lib/libgcc_s.so.1"
+uri = "file:/lib/x86_64-linux-gnu/libgcc_s.so.1"
+
+[[fs.mounts]]
+path = "/lib/libm.so.6"
+uri = "file:/lib/x86_64-linux-gnu/libm.so.6"
+
+[[fs.mounts]]
+path = "/lib/libpthread.so.0"
+uri = "file:/lib/x86_64-linux-gnu/libpthread.so.0"
+
+[[fs.mounts]]
+path = "/lib/libstdc++.so.6"
+uri = "file:/lib/x86_64-linux-gnu/libstdc++.so.6"
+
+[[fs.mounts]]
+path = "/usr/lib/x86_64-linux-gnu"
+uri = "file:/usr/lib/x86_64-linux-gnu"
+
+[[fs.mounts]]
+path = "/duckdb_real"
+uri = "file:duckdb_real"
+
+[[fs.mounts]]
+# Make the provided Lan demo bundle available inside the enclave at the same path
+# so code using the default ENC2HEALTH_ARCHIVE_PATH can find the archive unchanged.
+path = "/home/lan/Y_TE/To_Lan_from_Long"
+uri = "file:/home/lan/Y_TE/To_Lan_from_Long"
+
+[[fs.mounts]]
+# Expose the dataset directory directly as well (explicit mount point)
+path = "/home/lan/Y_TE/To_Lan_from_Long/lan_demo/dataset"
+uri = "file:/home/lan/Y_TE/To_Lan_from_Long/lan_demo/dataset"
+
+[sgx]
+max_threads = 4
+isvprodid = 0
+isvsvn = 0
+remote_attestation = "none"
+debug = false
+enable_stats = false
+edmm_enable = false
+enclave_size = "128M"
+use_exinfo = false
+
+[[sgx.trusted_files]]
+uri = "file:duckdb_real"
+sha256 = "f1aa00effc5dbda29c1a865f880754e0383a9ebf3418fb0569dd1f4ab90e7613"
+
+[[sgx.trusted_files]]
+uri = "file:/home/lan/Y_TE/To_Lan_from_Long/lan_demo/dataset/enc2health_dump.archive"
+sha256 = "7f0d9afcb0ebfc9ae778bc31a06c4ceb6650b6145424d229ea58da4873bd17c0"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"
+sha256 = "1cd555ac46b7887edeaf3c42aac5408c8135e52f6b37870da2cf82d5fe14e829"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libc.so.6"
+sha256 = "d8db8739a1633c972cec6a4fe0566bdcec6fd088f98723492ab0361f66238f75"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libdl.so.2"
+sha256 = "850b46fd4f4478060fc106f4d1dc4aa35c969eb5c9bd98aaf64dc6cb3d6a5e32"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libgcc_s.so.1"
+sha256 = "9c08cedd322f564a362444b58135cf0356a1113ceebb702c7e634e481fe1c8bb"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libm.so.6"
+sha256 = "1b87a1a50b496cfead2b0ad134c2ff536705c82608db240c7e8aa48d6c0e4217"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libpthread.so.0"
+sha256 = "92dcea07a5b11d939c22a96131d3fbb995e0a84a4d02db7d799bf357689cd794"
+
+[[sgx.trusted_files]]
+uri = "file:/lib/x86_64-linux-gnu/libstdc++.so.6"
+sha256 = "c3d5641b6d085d5b2e8d955cc709ab16a2616cf23cff91517a7e44733de39eb6"

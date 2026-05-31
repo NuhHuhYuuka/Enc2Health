@@ -66,7 +66,7 @@ except Exception:
         def _filtered(self, filters: dict) -> list[dict]:
             records = self._records
             if "ma_benh" in filters:
-                records = [r for r in records if r["ma_benh"] == str(filters["ma_benh"]).replace("DTE001", "E11").replace("DTE002", "I10").replace("DTE003", "J18").replace("DTE004", "K29").replace("DTE005", "M54").replace("DTE006", "N18")]
+                records = [r for r in records if r["ma_benh"] == str(filters["ma_benh"])]
             if "tuoi_min_enc" in filters:
                 records = [r for r in records if r["tuoi"] >= int(filters["tuoi_min_enc"])]
             if "tuoi_max_enc" in filters:
@@ -91,13 +91,13 @@ except Exception:
 
 ROUTER_URL = os.environ.get("ROUTER_URL", "http://localhost:8000")
 QUERY_PATTERNS = [
-    {"ma_benh": "DTE001"},
-    {"ma_benh": "DTE001"},
-    {"ma_benh": "DTE001"},
-    {"ma_benh": "DTE002"},
-    {"ma_benh": "DTE002"},
-    {"ma_benh": "DTE003"},
-    {"ma_benh": "DTE004"},
+    {"ma_benh": "E11"},
+    {"ma_benh": "E11"},
+    {"ma_benh": "E11"},
+    {"ma_benh": "I10"},
+    {"ma_benh": "I10"},
+    {"ma_benh": "J18"},
+    {"ma_benh": "K29"},
     {},
     {},
 ]

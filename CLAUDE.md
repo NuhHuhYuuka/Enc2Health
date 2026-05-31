@@ -78,6 +78,18 @@ python3 crypto/data/generate_ehr.py
 - ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), **RBAC+ABAC (dept-scoping, 4 role)**, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`)**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
 - ✅ Crypto/KMS: DTE/ORE/GCM/ECC, Vault, KMS API, generate_ehr.
 - ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
-- 🔴 **Mắt xích còn thiếu (phía Lan):** Pool nhận `ciphertexts` để giải mã AES-GCM trong enclave (hiện vẫn `MOCK_PATIENT_DATA`). RA-TLS còn stub. (Xem PROJECT.md §4, §5.5.)
+- ✅ **Mắt xích đã hoàn thành (phía Lan):** Pool đã nhận `ciphertexts`, giải mã AES-GCM trong enclave và thực thi aggregate trên DuckDB in-memory (không còn phụ thuộc `MOCK_PATIENT_DATA` cho luồng này). RA-TLS/attestation và Vault production integration vẫn cần hoàn thiện. (Xem PROJECT.md §4, §5.5.)
 
 > Khi sửa code làm thay đổi các mục trên: nhớ cập nhật **cả PROJECT.md và CLAUDE.md**.
+
+## Recent runs (2026-05-31)
+
+- `tests/test_router.py`: 30/30 passed ✅
+- `tests/test_e2e.py`: 7/7 passed against live stack ✅
+- `tests/leakage.py`: executed, `leakage_results.json` generated ✅
+- `tests/attack_bipartite.py`: added stub (simulated experiment) ✅
+- `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
+- `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
+- `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅
+
+Note: these runs were executed locally (non-Docker) with MongoDB seeded from `crypto/data/generate_ehr.py`.

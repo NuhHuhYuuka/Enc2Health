@@ -25,14 +25,8 @@ DEFAULT_MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 DEFAULT_DB_NAME = os.environ.get("MONGO_DB", "enc2health")
 DEFAULT_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
 KEY_DIR = Path(os.environ.get("ENC2HEALTH_KEY_DIR", REPO_ROOT / "crypto" / "data" / "keys"))
-ICD10_ALIASES = {
-    "DTE001": "E11",
-    "DTE002": "I10",
-    "DTE003": "J18",
-    "DTE004": "K29",
-    "DTE005": "M54",
-    "DTE006": "N18",
-}
+# Expect clients to provide real ICD-10 codes (e.g., "E11").
+ICD10_ALIASES = {}
 
 
 @dataclass
@@ -81,7 +75,7 @@ class SoftwareExecutor:
         query: Dict[str, Any] = {}
 
         if "ma_benh" in filters and self._dte_ma_benh is not None:
-            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            ma_benh = str(filters["ma_benh"])
             query["ma_benh_enc"] = self._dte_ma_benh.encrypt(
                 ma_benh,
                 b"field:ma_benh",
@@ -120,7 +114,7 @@ class SoftwareExecutor:
     def _fallback_count(self, filters: Dict[str, Any]) -> int:
         records = self._fallback_records
         if "ma_benh" in filters:
-            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            ma_benh = str(filters["ma_benh"])
             records = [r for r in records if r["ma_benh"] == ma_benh]
         if "khoa_phong" in filters:
             records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]
@@ -135,7 +129,7 @@ class SoftwareExecutor:
     def _fallback_aggregate(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
         records = self._fallback_records
         if "ma_benh" in filters:
-            ma_benh = ICD10_ALIASES.get(str(filters["ma_benh"]), str(filters["ma_benh"]))
+            ma_benh = str(filters["ma_benh"])
             records = [r for r in records if r["ma_benh"] == ma_benh]
         if "khoa_phong" in filters:
             records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]

@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-05-24T20:01:21.842328",
+  "test_name": "T12 - Hash Join vs Sort-Merge vs Nested Loop",
+  "environment": {
+    "patient_records": 10000,
+    "bill_records": 35052,
+    "elderly_patients_age_gt_60": 0,
+    "e11_patients": 10000
+  },
+  "iterations": 10,
+  "results": [
+    {
+      "strategy": "Hash Join",
+      "description": "DuckDB default join",
+      "avg_ms": 1.2798571000075754,
+      "p50_ms": 0.871624500064172,
+      "p95_ms": 5.346328999848993,
+      "p99_ms": 5.346328999848993,
+      "min_ms": 0.5787790000795212,
+      "max_ms": 5.346328999848993,
+      "iterations": 10,
+      "result_rows": 0
+    },
+    {
+      "strategy": "Sort-Merge Join",
+      "description": "Pre-sorted on join key (leverages ORE order)",
+      "avg_ms": 4.811354100002063,
+      "p50_ms": 4.84236099998725,
+      "p95_ms": 9.032460000071296,
+      "p99_ms": 9.032460000071296,
+      "min_ms": 3.3839600000646897,
+      "max_ms": 9.032460000071296,
+      "iterations": 10,
+      "result_rows": 0
+    },
+    {
+      "strategy": "Nested Loop Join",
+      "description": "Small inner table (E11 disease only)",
+      "avg_ms": 0.640917000009722,
+      "p50_ms": 0.645066500055691,
+      "p95_ms": 0.7374780000191095,
+      "p99_ms": 0.7374780000191095,
+      "min_ms": 0.534352999920884,
+      "max_ms": 0.7374780000191095,
+      "iterations": 10,
+      "result_rows": 0
+    }
+  ],
+  "winner": "Nested Loop Join",
+  "improvements": {
+    "sort_merge_vs_hash_pct": -275.9290080098462,
+    "nested_loop_vs_hash_pct": 49.9227687211386
+  }
+}

@@ -16,9 +16,9 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 |---|---|---|---|
 | Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | 🚧 Chưa nối vào luồng query thật |
 | Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + Router-side đẩy ciphertext sang TEE (chờ Pool nhận) |
-| TEE Enclave + Observability (Gramine, DuckDB, Prometheus) | Lan | ✅ Done | 🚧 Enclave xài mock plaintext, không giải mã thật |
+| TEE Enclave + Observability (Gramine, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Enclave giải mã AES-GCM từ ciphertext (Pool) + DuckDB in-memory; RA-TLS/attestation còn pending |
 
-> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass; tuy nhiên phần TEE vẫn còn phụ thuộc dữ liệu mock trong pool, chưa hoàn tất pipeline decrypt dữ liệu thật end-to-end trong enclave. Đây là việc ưu tiên số 1 (xem §5).
+> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass. Phần TEE đã được nối dây cơ bản: Router có thể đẩy `vien_phi_enc` → Pool nhận ciphertexts, Pool giải mã AES-GCM và chạy aggregate trên DuckDB in-memory. Việc còn lại là chuẩn hoá RA-TLS/attestation và production Vault integration.
 
 ---
 
@@ -135,9 +135,9 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### 4.1. 🔴 Tích hợp E2E thật (ưu tiên cao nhất)
 - ✅ **Router SOFTWARE/Fallback đã query MongoDB thật.** Đã tích hợp `software_executor.py` vào `router/main.py`; không còn placeholder `{"result": 0.0, ...}`.
-- ⚠️ **Enclave dùng mock plaintext (phía Pool — Lan).** Router đã gom ciphertext từ Mongo và đẩy kèm (`ROUTER_TEE_PUSH_CIPHERTEXT=1`), nhưng `ecall_pool.py` vẫn xài `MOCK_PATIENT_DATA`, chưa nhận `ciphertexts` để **giải mã AES-GCM** trong enclave. → Còn lại phía Lan: pool đọc `ciphertexts` → lấy DEK từ Vault → `enclave_service.decrypt_aes_gcm` → DuckDB AVG/SUM.
-- 🚧 **DuckDB real chưa được nối vào pool.** `enclave_service.py` (DuckDB thật) và `ecall_pool.py` (mock, có HTTP) là hai file rời. → Hợp nhất: pool gọi DuckDB thật trên dữ liệu vừa giải mã.
-- ⚠️ **Vault runtime mới ở mức fallback local key files.** `ecall_pool` đã load key runtime (từ Vault nếu có; nếu không thì từ local dev key files), nhưng luồng Vault production-ready end-to-end vẫn cần hoàn thiện.
+- ✅ **Enclave đã nhận ciphertext và thực thi decrypt trong Pool (Lan).** Router có thể gom `vien_phi_enc` và đẩy batch ciphertexts; `ecall_pool.py` giờ giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` và ingest vào DuckDB in-memory.
+- ✅ **DuckDB đã được tích hợp vào Pool.** `ecall_pool` thực thi `SUM`/`AVG` trên bảng tạm chứa giá trị đã giải mã.
+- ⚠️ **Vault runtime:** Pool cố gắng lấy DEK từ Vault nếu có (fallback về local key files khi không có Vault token). Việc chuẩn hoá Vault production integration và RA-TLS/attestation vẫn chưa hoàn tất.
 
 ### 4.2. 🟠 Bảo mật / Attestation
 - 🚧 **RA-TLS là stub.** `/attest` trả `mock-sgx-quote`, `mock-mrenclave`. → Cần quote thật (gramine-sgx + DCAP) hoặc ít nhất giải thích rõ "simulation" trong báo cáo.
@@ -163,8 +163,8 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### Sprint 1 — "Nối dây" E2E thật (xương sống của đồ án)
 1. ✅ **`router/software_executor.py`** — đã nối MongoDB ciphertext path cho SOFTWARE mode.
-2. **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool load DEK từ Vault → `decrypt_aes_gcm` → DuckDB `AVG/SUM`. Bỏ `MOCK_PATIENT_DATA`.
-3. **Load key vào pool lúc startup** — gọi `vault_client.get_dek("gcm_dek")` trong lifespan, để `/health` `keys_loaded` không rỗng.
+2. ✅ **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` → ingest vào DuckDB in-memory → `AVG/SUM` (implemented in `enclave/enclave/ecall_pool.py`).
+3. ✅ **Load key vào pool lúc startup** — Pool cố gắng lấy DEK từ Vault nếu có, và fallback về local key files; `/health` phản ánh `keys_loaded`.
 4. **Thống nhất ICD-10** trong cả mock lẫn data thật. ✅ `test_e2e.py` đã được viết lại: verify kết quả Router so với truy vấn MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa chạy — không còn hard-code `n_records == 5`.
 
 → *Định nghĩa "xong": chạy đúng truy vấn mẫu trong kịch bản — "AVG viện phí bệnh nhân E11 trên 60 tuổi" — từ client thật, qua Mongo (DTE+ORE) → Enclave (GCM+DuckDB) → ra 1 con số, CSP chỉ thấy ciphertext.*
@@ -187,7 +187,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 **Đã xong (chạy thật):** routing operator, cost model, RBAC + mask, JWT, probing + resource_monitor (RSS/EPC thật), adaptive fallback, ecall_client (mTLS+JWT), **software_executor query MongoDB ciphertext thật**, smoke mTLS local pass.
 
 **Đã hoàn thành đợt này (2026-05-30):**
-1. ✅ **TEE path — phía Router đã đẩy ciphertext vào Enclave.** `software_executor.fetch_vien_phi_ciphertexts(filters)` gom bản mã `vien_phi_enc` từ MongoDB; `main.py` (khi bật `ROUTER_TEE_PUSH_CIPHERTEXT=1`) gửi kèm batch ciphertext qua `ecall_client.query(..., ciphertexts=...)` và trả `ciphertext_pushed` trong response. ⚠️ **Còn chờ Lan:** Pool cần endpoint nhận `ciphertexts` để giải mã thật (hiện Pool bỏ qua field thừa → tương thích ngược, chưa tính trên ciphertext gửi lên).
+1. ✅ **TEE path — Router → Pool end-to-end (basic):** `software_executor.fetch_vien_phi_ciphertexts(filters)` gom bản mã `vien_phi_enc` từ MongoDB; `main.py` (khi bật `ROUTER_TEE_PUSH_CIPHERTEXT=1`) gửi batch ciphertexts qua `ecall_client.query(..., ciphertexts=...)`. `ecall_pool` hiện nhận `ciphertexts`, giải mã AES-GCM và trả aggregate (DuckDB in-memory). RA-TLS/attestation vẫn pending.
 2. ✅ **Cost model dùng số record THẬT + so sánh 2 mode.** Bỏ `n_records=1000` hard-code; `main.py` lấy `n_records` thật từ kết quả rồi gọi `compare_costs(n)` → trả `cost_estimate` gồm cả C_soft, C_TEE, `cheaper_mode`, `tee_over_software_ratio`. (Routing vẫn theo operator + saturation để giữ ràng buộc bảo mật; cost dùng cho observability/justify.)
 3. ✅ **C_soft nối số liệu thật của Long.** `cost_model.py` đọc `crypto/benchmark/c_soft_metrics.json` (AES-SIV/OPE encrypt avg) thay cho `C_SOFT_BASE_MS=0.5`; fallback hằng số nếu thiếu file.
 4. ✅ **Mở rộng routing operator.** `query_router.py` thêm `count_distinct→TEE`, `group_by/join/equality/range→SOFTWARE` đúng kịch bản (`=, JOIN, GROUP BY, COUNT → Software`; `SUM, AVG, COUNT DISTINCT → TEE`).
@@ -235,3 +235,14 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 ---
 
 *PROJECT.md — bản đồ trạng thái đồ án Enc²Health. Cập nhật mỗi khi hoàn thành một mục IN DEV.*
+
+## RECENT RUNS (2026-05-31)
+
+- `tests/test_router.py`: 30/30 passed ✅
+- `tests/test_e2e.py`: 7/7 passed against live stack ✅
+- `tests/leakage.py`: executed, `leakage_results.json` generated ✅
+- `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
+- `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
+- `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅
+
+These runs were executed locally (non-Docker) with MongoDB seeded from `crypto/data/generate_ehr.py`.

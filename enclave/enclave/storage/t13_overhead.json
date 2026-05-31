@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-05-24T20:04:34.645345",
+  "test_name": "T13 - Storage Overhead Measurement",
+  "dataset": {
+    "num_records": 10000,
+    "source": "Real patient data from MongoDB archive"
+  },
+  "results": {
+    "plaintext": {
+      "count": 10000,
+      "total_size_bytes": 1598438,
+      "total_size_mb": 1.52,
+      "avg_doc_size_bytes": 159.84,
+      "min_doc_size_bytes": 157,
+      "max_doc_size_bytes": 163
+    },
+    "fle": {
+      "count": 10000,
+      "total_size_bytes": 3448438,
+      "total_size_mb": 3.29,
+      "avg_doc_size_bytes": 344.84,
+      "min_doc_size_bytes": 342,
+      "max_doc_size_bytes": 348
+    },
+    "asym": {
+      "count": 10000,
+      "total_size_bytes": 4798438,
+      "total_size_mb": 4.58,
+      "avg_doc_size_bytes": 479.84,
+      "min_doc_size_bytes": 477,
+      "max_doc_size_bytes": 483
+    }
+  },
+  "overhead_analysis": {
+    "plaintext": {
+      "storage_mb": 1.52,
+      "avg_doc_bytes": 159.84,
+      "overhead_ratio": 1.0,
+      "overhead_pct": 0.0
+    },
+    "fle": {
+      "storage_mb": 3.29,
+      "avg_doc_bytes": 344.84,
+      "overhead_ratio": 2.16,
+      "overhead_pct": 115.7
+    },
+    "asym": {
+      "storage_mb": 4.58,
+      "avg_doc_bytes": 479.84,
+      "overhead_ratio": 3.0,
+      "overhead_pct": 200.2
+    }
+  },
+  "summary": {
+    "fle_overhead_ratio": 2.16,
+    "fle_overhead_pct": 115.7,
+    "asym_overhead_ratio": 3.0,
+    "asym_overhead_pct": 200.2
+  }
+}
