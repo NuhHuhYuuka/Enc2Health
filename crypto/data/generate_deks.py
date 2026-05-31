@@ -1,26 +1,38 @@
 """
-Generate symmetric DEKs for AES-GCM, AES-SIV (DTE), and ORE, and save to data/keys.
+Sinh DEK đối xứng (DTE / ORE / GCM) vào BỘ KEY DÙNG CHUNG (crypto/data/keys/).
+Idempotent: chỉ tạo key CÒN THIẾU, KHÔNG ghi đè → giữ key chung ổn định (hết churn).
 """
-import os, base64, sys
+import os
+import sys
+from pathlib import Path
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from crypto.dte import DTECipher
 from crypto.ore import ORECipher
 from crypto.gcm import AESGCMCipher
 
+KEY_DIR = Path(__file__).resolve().parent / "keys"
+
+
+def _ensure(cipher_cls, filename: str) -> bool:
+    path = KEY_DIR / filename
+    if path.exists():
+        return False
+    cipher_cls().save_key(str(path))
+    return True
+
+
 def main():
-    os.makedirs("data/keys", exist_ok=True)
-    dte_ma = DTECipher()
-    dte_khoa = DTECipher()
-    ore = ORECipher()
-    gcm = AESGCMCipher()
+    KEY_DIR.mkdir(parents=True, exist_ok=True)
+    specs = [
+        (DTECipher, "dte_ma_benh.key"),
+        (DTECipher, "dte_khoa.key"),
+        (ORECipher, "ore.key"),
+        (AESGCMCipher, "gcm_dek.key"),
+    ]
+    created = sum(_ensure(cls, name) for cls, name in specs)
+    print(f"DEKs in {KEY_DIR}: {created} tạo mới, {len(specs) - created} giữ nguyên (đã có)")
 
-    dte_ma.save_key("data/keys/dte_ma_benh.key")
-    dte_khoa.save_key("data/keys/dte_khoa.key")
-    ore.save_key("data/keys/ore.key")
-    with open("data/keys/gcm_dek.key", "w") as f:
-        f.write(base64.b64encode(gcm.key).decode())
-
-    print("Saved DEKs to data/keys/")
 
 if __name__ == '__main__':
     main()

@@ -9,7 +9,7 @@ from faker import Faker
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from crypto.asym import ecc_encrypt, generate_all_department_keypairs
+from crypto.asym import ecc_encrypt
 from crypto.dte  import DTECipher
 from crypto.ore  import ORECipher
 from crypto.gcm  import AESGCMCipher
@@ -60,17 +60,36 @@ def _load_or_create_cipher(cipher_cls, key_path: Path):
     cipher.save_key(str(key_path))
     return cipher
 
+
+def _load_or_create_dept_keypairs(key_dir: Path) -> dict:
+    """Keypair Khoa DÙNG CHUNG cả nhóm: nạp từ file nếu đã có, chỉ sinh mới khi thiếu.
+
+    Nhờ vậy public/private PEM ổn định — không random lại mỗi lần chạy → hết
+    xung đột pull/push. (Trước đây luôn gọi generate_all_department_keypairs nên
+    mỗi người chạy ra key khác nhau.)
+    """
+    from crypto.asym import generate_ecc_keypair
+    result = {}
+    for dept in DEPARTMENTS:
+        pub_path = key_dir / f"{dept}_public.pem"
+        priv_path = key_dir / f"{dept}_private.pem"
+        if pub_path.exists():
+            result[dept] = {"public_pem": pub_path.read_text()}
+        else:
+            priv, pub = generate_ecc_keypair()
+            key_dir.mkdir(parents=True, exist_ok=True)
+            pub_path.write_text(pub.decode())
+            priv_path.write_text(priv.decode())
+            result[dept] = {"public_pem": pub.decode()}
+    return result
+
 def main():
     key_dir = Path(__file__).resolve().parent / "keys"
 
-    print("[1/5] Sinh keypairs cho tất cả Khoa (ECC P-384)...")
-    dept_keypairs = generate_all_department_keypairs("ECC")
-    # Lưu public keys ra file để dùng lại (private keys MUST be stored in Vault)
+    print("[1/5] Đồng bộ keypair Khoa (ECC P-384) — DÙNG CHUNG, nạp nếu đã có...")
     key_dir.mkdir(parents=True, exist_ok=True)
-    for dept, kp in dept_keypairs.items():
-        with open(key_dir / f"{dept}_public.pem", "w") as f:
-            f.write(kp["public_pem"])
-    print("  Public keypairs saved to data/keys/ (private keys NOT written — store in Vault)")
+    dept_keypairs = _load_or_create_dept_keypairs(key_dir)
+    print(f"  {len(dept_keypairs)} khoa: dùng key chung tại {key_dir} (không random lại nếu đã có)")
 
     print("[2/5] Khởi tạo các cipher...")
     # DTE: mỗi field 1 key riêng
