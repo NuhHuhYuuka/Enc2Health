@@ -1,9 +1,12 @@
 # Main Router Service - tích hợp T1, T2, T4, T9
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
+from pathlib import Path
 from common.auth import validate_jwt_bearer
 from pydantic import BaseModel, Field
-from typing import Dict
+from typing import Dict, Optional
 import time
 
 from router.query_router import QueryRouter, ExecutionMode
@@ -14,6 +17,20 @@ from router.adaptive import AdaptiveController
 from router.software_executor import SoftwareExecutor
 
 app = FastAPI(title="Enc2Health Query Router", version="1.0.0")
+
+# CORS: cho phép frontend ở domain khác (vd UI host trên Vercel) gọi API.
+# Đặt ENC2HEALTH_CORS_ORIGINS="https://your-app.vercel.app" (phẩy để nhiều origin).
+_cors = os.environ.get("ENC2HEALTH_CORS_ORIGINS", "")
+if _cors:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in _cors.split(",") if o.strip()],
+        allow_methods=["*"], allow_headers=["*"],
+    )
+
+# UI demo + endpoint cấp token: CHỈ bật khi ENC2HEALTH_DEV_UI=1 (không dùng production).
+DEV_UI = os.environ.get("ENC2HEALTH_DEV_UI", "0") == "1"
+UI_HTML = Path(__file__).resolve().parent / "ui.html"
 
 router   = QueryRouter()
 abac     = AbacPolicy()
@@ -126,3 +143,31 @@ async def adaptive_simulate(pressure: float | None = None):
 async def metrics():
     """Return current real-time resource snapshot for adaptive routing."""
     return adaptive.get_status()
+
+
+# ── UI demo (chỉ bật khi ENC2HEALTH_DEV_UI=1) ───────────────────────────────
+@app.get("/ui", response_class=HTMLResponse)
+async def ui_page():
+    """Trang demo web. Bật bằng env ENC2HEALTH_DEV_UI=1."""
+    if not DEV_UI:
+        raise HTTPException(status_code=404, detail="UI tắt (đặt ENC2HEALTH_DEV_UI=1)")
+    return HTMLResponse(UI_HTML.read_text(encoding="utf-8"))
+
+
+class TokenRequest(BaseModel):
+    role: str = "doctor"
+    dept: Optional[str] = None
+
+
+@app.post("/dev/token")
+async def dev_token(req: TokenRequest):
+    """Cấp JWT cho UI demo theo vai trò/khoa. CHỈ dev (ENC2HEALTH_DEV_UI=1).
+
+    KHÔNG dùng ở production — đây là tiện ích demo để khỏi phải tự sinh token.
+    """
+    if not DEV_UI:
+        raise HTTPException(status_code=404, detail="disabled")
+    from common.auth import generate_test_jwt
+    claims = {"dept": req.dept} if req.dept else None
+    token = generate_test_jwt(f"ui-{req.role}", req.role, claims=claims)
+    return {"token": token, "role": req.role, "dept": req.dept}

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enc²Health EHR — Hệ thống Hồ sơ bệnh án điện tử</title>
+<style>
+  :root{
+    --bg:#eef3f8; --card:#ffffff; --ink:#16324f; --mut:#6b7e92; --line:#e3eaf2;
+    --brand:#0ea5a4; --brand2:#1f6feb; --tee:#7c3aed; --soft:#0d9488; --warn:#d97706; --ok:#16a34a; --bad:#dc2626;
+    --shadow:0 2px 10px rgba(20,50,80,.07), 0 1px 3px rgba(20,50,80,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  /* Topbar */
+  .top{display:flex;align-items:center;gap:14px;padding:12px 22px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  .logo .mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;color:#fff;font-size:18px}
+  .top .sub{color:var(--mut);font-size:12px;font-weight:500}
+  .spacer{flex:1}
+  .userchip{display:flex;align-items:center;gap:10px;background:#f1f6fb;border:1px solid var(--line);border-radius:999px;padding:5px 6px 5px 14px}
+  .userchip b{font-size:13px}.userchip .av{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700}
+  /* Layout */
+  .shell{display:grid;grid-template-columns:210px 1fr;gap:18px;max-width:1180px;margin:18px auto;padding:0 18px}
+  .nav{display:flex;flex-direction:column;gap:4px}
+  .nav a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;color:var(--mut);text-decoration:none;font-size:14px;font-weight:600;cursor:pointer}
+  .nav a.on,.nav a:hover{background:#fff;color:var(--ink);box-shadow:var(--shadow)}
+  .main{min-width:0}
+  h2.sec{font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--mut);margin:0 0 12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+  .grid{display:grid;gap:16px}.cols-3{grid-template-columns:repeat(3,1fr)}.cols-2{grid-template-columns:1fr 1fr}
+  /* KPI */
+  .kpi .lbl{color:var(--mut);font-size:13px;font-weight:600}
+  .kpi .val{font-size:30px;font-weight:800;margin:6px 0 2px}
+  .kpi .sub{font-size:12px;color:var(--mut)}
+  .kpi .ic{float:right;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:20px;background:#eafaf8}
+  label{display:block;font-size:12px;color:var(--mut);margin:12px 0 5px;font-weight:600}
+  select,input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid #cfdbe8;background:#fff;color:var(--ink);font-size:14px}
+  button{margin-top:14px;width:100%;padding:11px;border:0;border-radius:9px;background:var(--brand2);color:#fff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:var(--shadow)}
+  button.ghost{background:#eef4fb;color:var(--brand2)} button:hover{filter:brightness(1.05)}
+  .row{display:flex;gap:12px}.row>div{flex:1}
+  .badge{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700}
+  .b-tee{background:#f1ecfd;color:#6d28d9;border:1px solid #c4b5fd}
+  .b-soft{background:#e7f6f4;color:#0f766e;border:1px solid #99e9df}
+  .b-fall{background:#fdf0db;color:#b45309;border:1px solid #fcd9a0}
+  .b-403{background:#fde8e8;color:#b91c1c;border:1px solid #f7b4b4}
+  .result-num{font-size:38px;font-weight:800;margin:10px 0 2px}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .kv span:first-child{color:var(--mut)} .muted{color:var(--mut);font-size:13px}
+  .hide{display:none}
+  .sec-panel{background:#0f1f33;color:#cfe0f0;border-color:#1c3a5e}
+  .sec-panel h2.sec{color:#7fa6cf}
+  .sec-panel .kv{border-color:#1c3a5e}.sec-panel .kv span:first-child{color:#7fa6cf}
+  .cipher{font-family:ui-monospace,monospace;font-size:11px;color:#5fd0c0;word-break:break-all;background:#0a1828;padding:8px 10px;border-radius:8px;border:1px solid #173552;max-height:64px;overflow:auto}
+  input[type=range]{accent-color:var(--brand)}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);cursor:pointer;user-select:none}
+  .bar{height:9px;border-radius:6px;background:#e9eff6;overflow:hidden;margin-top:6px}.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2))}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo"><span class="mark">🏥</span> Enc²Health <span class="sub">· Hồ sơ bệnh án điện tử (EHR)</span></div>
+  <div class="spacer"></div>
+  <div class="userchip"><b id="uName">Khách</b><span class="av" id="uAv">?</span></div>
+</div>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <div class="nav">
+    <a class="on" onclick="show('dash',this)">📊 Tổng quan</a>
+    <a onclick="show('analytics',this)">🩺 Phân tích lâm sàng</a>
+    <a onclick="show('sec',this)">🔒 Lớp bảo mật</a>
+    <div style="margin-top:18px"></div>
+    <div class="card" style="padding:14px">
+      <label style="margin-top:0">Đăng nhập với vai trò</label>
+      <select id="role" onchange="syncDept()">
+        <option value="doctor" selected>Bác sĩ điều trị</option>
+        <option value="admin_staff">Nhân viên hành chính</option>
+        <option value="researcher">Nhà nghiên cứu</option>
+        <option value="admin">Quản trị hệ thống</option>
+      </select>
+      <div id="deptWrap"><label>Khoa phụ trách</label>
+        <select id="dept">
+          <option>Tim_mach</option><option>Noi</option><option>Ngoai</option>
+          <option>Cap_cuu</option><option>Than_kinh</option><option>Nhi</option>
+        </select>
+      </div>
+      <button class="ghost" onclick="login()">Đăng nhập</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- DASHBOARD -->
+    <div id="view-dash">
+      <h2 class="sec">Tổng quan — <span id="scopeLbl">…</span></h2>
+      <div class="grid cols-3">
+        <div class="card kpi"><div class="ic">👥</div><div class="lbl">Bệnh nhân trong phạm vi</div><div class="val" id="kPat">—</div><div class="sub">trên dữ liệu mã hóa</div></div>
+        <div class="card kpi"><div class="ic" style="background:#e7f0fe">💳</div><div class="lbl">Viện phí trung bình</div><div class="val" id="kAvg">—</div><div class="sub" id="kAvgSub">VND</div></div>
+        <div class="card kpi"><div class="ic" style="background:#f1ecfd">🧬</div><div class="lbl">BN Tiểu đường (E11)</div><div class="val" id="kE11">—</div><div class="sub">DTE equality search</div></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2 class="sec">Tỉ trọng bệnh nhân theo nhóm tuổi (ORE range)</h2>
+        <div id="ageChart" class="muted">Đăng nhập để tải số liệu…</div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div id="view-analytics" class="hide">
+      <h2 class="sec">Phân tích lâm sàng</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <label>Nghiệp vụ</label>
+          <select id="qtype">
+            <option value="avg_vien_phi">Chi phí điều trị trung bình (AVG)</option>
+            <option value="sum_vien_phi">Tổng chi phí điều trị (SUM)</option>
+            <option value="count">Thống kê số bệnh nhân (COUNT)</option>
+          </select>
+          <div class="row">
+            <div><label>Mã bệnh (ICD-10)</label><input id="mabenh" value="E11" placeholder="E11"></div>
+            <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="60" placeholder="60"></div>
+          </div>
+          <button onclick="runQuery()">▶ Thực hiện phân tích</button>
+          <div class="muted" style="margin-top:10px">Hệ thống tự chọn TEE (giải mã trong enclave) hay Software (trên ciphertext) tùy độ nhạy & tải.</div>
+        </div>
+        <div class="card">
+          <h2 class="sec">Kết quả</h2>
+          <div id="resultBox" class="muted">Chưa có phân tích nào.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECURITY -->
+    <div id="view-sec" class="hide">
+      <h2 class="sec">Lớp bảo mật & vận hành — "tấm rèm phía sau"</h2>
+      <div class="card sec-panel">
+        <div class="kv"><span>Chế độ thực thi truy vấn gần nhất</span><b id="sMode">—</b></div>
+        <div class="kv"><span>Số bản mã đẩy vào enclave</span><b id="sCt">—</b></div>
+        <div class="kv"><span>Chi phí ước tính (Software / TEE)</span><b id="sCost">—</b></div>
+        <div style="margin:12px 0 4px;color:#7fa6cf;font-size:13px">Nhà cung cấp Cloud (CSP) nhìn thấy gì khi lưu trữ:</div>
+        <div class="cipher" id="sCipher">— (chạy một phân tích để xem mẫu ciphertext) —</div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2 class="sec">Mô phỏng đợt dịch — cơ chế tự thích nghi</h2>
+        <div class="muted">Tải tăng vọt → EPC enclave bão hòa. Vượt <b>80%</b> → tự hạ AVG/SUM xuống Software giữ thông lượng; dưới <b>60%</b> → phục hồi (hysteresis).</div>
+        <label>Áp lực EPC: <b id="pVal">0%</b></label>
+        <input id="pressure" type="range" min="0" max="100" value="0" oninput="simulate(this.value)">
+        <div class="bar"><i id="pBar" style="width:0%"></i></div>
+        <div id="adaptiveBox" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = (new URLSearchParams(location.search).get('api') || '').replace(/\/+$/,'');
+let TOKEN=null, ROLE=null, DEPT=null;
+
+function show(v,el){ for(const id of ['dash','analytics','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
+  if(el){document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on')); el.classList.add('on');} }
+function syncDept(){ document.getElementById('deptWrap').style.display = document.getElementById('role').value==='doctor'?'block':'none'; }
+
+async function login(){
+  ROLE=document.getElementById('role').value;
+  DEPT=(ROLE==='doctor')?document.getElementById('dept').value:null;
+  const r=await fetch(API+'/dev/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:ROLE,dept:DEPT})});
+  if(!r.ok){alert('Đăng nhập lỗi '+r.status);return;}
+  const d=await r.json(); TOKEN=d.token;
+  const names={doctor:'BS. '+(DEPT||''),admin_staff:'NV Hành chính',researcher:'NCV',admin:'Quản trị'};
+  document.getElementById('uName').textContent=names[ROLE]||ROLE;
+  document.getElementById('uAv').textContent=(names[ROLE]||'U')[0];
+  document.getElementById('scopeLbl').textContent = DEPT?('Khoa '+DEPT):'Toàn bệnh viện';
+  loadDashboard();
+}
+
+async function call(qtype,filters){
+  const r=await fetch(API+'/query',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body:JSON.stringify({query_type:qtype,filters,role:ROLE})});
+  return {status:r.status, data: r.ok? await r.json():null};
+}
+function fmt(v){return (v==='[MASKED]')?'🔒 Đã ẩn':(typeof v==='number'?v.toLocaleString('vi-VN'):v);}
+
+async function loadDashboard(){
+  const pat=await call('count',{}); document.getElementById('kPat').textContent = pat.data? fmt(pat.data.result.result):'—';
+  const avg=await call('avg_vien_phi',{});
+  if(avg.status===403){document.getElementById('kAvg').textContent='—';document.getElementById('kAvgSub').textContent='không có quyền';}
+  else if(avg.data){const v=avg.data.result.result; document.getElementById('kAvg').textContent=(v==='[MASKED]')?'🔒':Math.round(v).toLocaleString('vi-VN');}
+  const e11=await call('count',{ma_benh:'E11'}); document.getElementById('kE11').textContent = e11.data? fmt(e11.data.result.result):'—';
+  drawAges();
+}
+async function drawAges(){
+  const buckets=[['0–30',0,30],['31–50',31,50],['51–70',51,70],['71+',71,200]]; let rows='', max=1, vals=[];
+  for(const[lbl,lo,hi] of buckets){ const f={tuoi_min_enc:lo}; if(hi<200)f.tuoi_max_enc=hi;
+    const r=await call('count',f); const n=(r.data&&typeof r.data.result.result==='number')?r.data.result.result:0; vals.push([lbl,n]); max=Math.max(max,n);}
+  for(const[lbl,n] of vals){ rows+=`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span class="muted">${lbl} tuổi</span><b>${n.toLocaleString('vi-VN')}</b></div><div class="bar"><i style="width:${Math.round(n/max*100)}%"></i></div></div>`;}
+  document.getElementById('ageChart').innerHTML=rows||'<span class="muted">Không có dữ liệu (role bị giới hạn?)</span>';
+}
+
+async function runQuery(){
+  if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
+  const qtype=document.getElementById('qtype').value, filters={};
+  const mb=document.getElementById('mabenh').value.trim(), tm=document.getElementById('tuoimin').value.trim();
+  if(mb)filters.ma_benh=mb; if(tm)filters.tuoi_min_enc=parseInt(tm);
+  const box=document.getElementById('resultBox'); box.innerHTML='<span class="muted">Đang xử lý…</span>';
+  const {status,data}=await call(qtype,filters);
+  if(status===403){box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">Vai trò này bị từ chối truy vấn (RBAC).</p>';updateSec(null);return;}
+  if(!data){box.innerHTML='<p class="muted">Lỗi '+status+'</p>';return;}
+  const mode=data.mode, fell=mode!==data.requested_mode, res=data.result||{}, val=res.result;
+  const badge=mode==='tee'?'<span class="badge b-tee">🔒 TEE · Enclave</span>':(fell?'<span class="badge b-fall">⚠️ Fallback · Software</span>':'<span class="badge b-soft">Software</span>');
+  const unit=(qtype.includes('vien_phi'))?' VND':'';
+  box.innerHTML=`<div>${badge}</div><div class="result-num">${val==='[MASKED]'?'🔒 Đã ẩn':(typeof val==='number'?val.toLocaleString('vi-VN')+unit:val)}</div>
+    <div class="kv"><span>Số bệnh nhân</span><b>${res.n_records??'—'}</b></div>
+    <div class="kv"><span>Cột bị ẩn (quyền)</span><b>${(data.masked_fields||[]).join(', ')||'không'}</b></div>
+    <div class="kv"><span>Giới hạn khoa (ABAC)</span><b>${data.abac_scope&&data.abac_scope.khoa_phong?data.abac_scope.khoa_phong:'không'}</b></div>
+    <div class="kv"><span>Độ trễ</span><b>${data.total_latency_ms} ms</b></div>`;
+  updateSec(data);
+}
+
+function updateSec(data){
+  if(!data){return;}
+  const mode=data.mode, fell=mode!==data.requested_mode;
+  document.getElementById('sMode').textContent = mode==='tee'?'TEE (giải mã trong enclave)':(fell?'Software (FALLBACK)':'Software');
+  document.getElementById('sCt').textContent = (data.ciphertext_pushed!=null)?data.ciphertext_pushed:'(không đẩy)';
+  const c=data.cost_estimate||{}; document.getElementById('sCost').textContent=`${c.software?.estimated_latency_ms??'?'} / ${c.tee?.estimated_latency_ms??'?'} ms`;
+  // mẫu ciphertext minh họa CSP thấy gì (không phải data thật, chỉ minh họa hình thức)
+  document.getElementById('sCipher').textContent = 'ma_benh_enc: rscDtymPdB16NihuNDRKic...  |  tuoi_enc: 741504368  |  vien_phi_enc: 7i9xjbfwmebf1gtGlW3y...';
+}
+
+async function simulate(v){
+  document.getElementById('pVal').textContent=v+'%'; document.getElementById('pBar').style.width=v+'%';
+  const r=await fetch(API+'/adaptive/simulate?pressure='+(v/100),{method:'POST'}); const d=await r.json();
+  const m=d.system_mode, badge=m==='fallback'?'<span class="badge b-fall">⚠️ FALLBACK</span>':'<span class="badge b-soft">✅ Bình thường (TEE)</span>';
+  document.getElementById('adaptiveBox').innerHTML=`Trạng thái: ${badge} &nbsp;<span class="muted">ngưỡng fallback ${d.epc_threshold*100}% · phục hồi ${d.restore_threshold*100}%</span>`;
+}
+
+syncDept(); login(); simulate(0);
+</script>
+</body>
+</html>
