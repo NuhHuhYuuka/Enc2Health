@@ -2,7 +2,7 @@
 from fastapi import FastAPI, HTTPException, Request
 import os
 from common.auth import validate_jwt_bearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict
 import time
 
@@ -29,7 +29,7 @@ TEE_PUSH_CIPHERTEXT = os.environ.get("ROUTER_TEE_PUSH_CIPHERTEXT", "0") == "1"
 
 class QueryRequest(BaseModel):
     query_type: str
-    filters: Dict = {}
+    filters: Dict = Field(default_factory=dict)
     role: str = "doctor"
 
 @app.post("/query")

@@ -6,7 +6,7 @@
 
 ## Dự án là gì
 
-**Enc²Health** — phân tích dữ liệu y tế nhạy cảm (PHI) **tự thích nghi** trên Cloud-Native DBMS, kiến trúc **D Hybrid Adaptive**: truy vấn chạy ở **Software mode** (DTE/ORE trên ciphertext MongoDB) hoặc **TEE mode** (SGX Enclave, DuckDB AVG/SUM), tự **fallback** TEE→Software khi EPC bão hòa (>80%). Mô hình đe dọa: cloud admin honest-but-curious quan sát được RAM/OS.
+**Enc²Health** — phân tích dữ liệu y tế nhạy cảm (PHI) **tự thích nghi** trên Cloud-Native DBMS, kiến trúc **D Hybrid Adaptive**: truy vấn chạy ở **Software mode** (DTE/ORE trên ciphertext MongoDB) hoặc **TEE mode** (SGX Enclave khi có phần cứng; Gramine simulation khi không có), tự **fallback** TEE→Software khi EPC bão hòa (>80%). Mô hình đe dọa: cloud admin honest-but-curious quan sát được RAM/OS. Attestation hiện là signed simulation (HMAC + freshness), chưa phải SGX quote/DCAP thật.
 
 Môn **NT219.Q2.ANTT**. 3 thành viên: Long (mã hóa & KMS), Lan (TEE/SGX & observability), Nam (Query Router & tích hợp).
 
@@ -69,16 +69,17 @@ python3 crypto/data/generate_ehr.py
 - **TEE ciphertext push:** `ROUTER_TEE_PUSH_CIPHERTEXT=1` để Router gom `vien_phi_enc` từ Mongo và đẩy vào Pool (mặc định tắt). `C_SOFT_METRICS_PATH` override file số liệu C_soft.
 - **Cột ciphertext MongoDB:** `ma_benh_enc` (DTE, equality), `tuoi_enc` (ORE, range `$gte/$lte`), `vien_phi_enc` (AES-GCM, giải mã để aggregate).
 - **Mã bệnh ICD-10:** luồng chính dùng ICD-10 (`E11`, `I10`, ...). Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
+- **Duplicate enclave test file:** chỉ giữ một bản `test_ecall_pool.py`; bản copy handoff đã xoá để tránh lỗi collect.
 - **RBAC/ABAC** (`router/rbac.py` + `router/abac.py`): admin=full · doctor=không `sum_vien_phi` (403) · admin_staff=xem viện phí, che `ma_benh` · researcher=`[MASKED]` vien_phi/ma_benh. **ABAC dept-scoping:** JWT có claim `dept` → bác sĩ chỉ xem khoa mình (Router tiêm `khoa_phong` vào filter, client không nới rộng). `ABAC_REQUIRE_DEPT=1` để strict.
 - **Stack Python:** FastAPI + pymongo + cryptography + pyope + hvac + PyJWT (xem `requirements.txt`).
 - **Shell:** môi trường Windows + WSL (kali); dùng Bash tool cho script POSIX.
 
 ## Trạng thái hiện tại (tóm tắt — chi tiết ở PROJECT.md)
 
-- ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), **RBAC+ABAC (dept-scoping, 4 role)**, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`)**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
+- ✅ Router: routing (mở rộng operator: count_distinct→TEE, group_by/join/equality→SOFTWARE), **RBAC+ABAC (dept-scoping, 4 role)**, JWT, **cost model dùng số record thật + C_soft số liệu thật của Long + `compare_costs`**, probing+resource_monitor (RSS/EPC thật), **adaptive fallback có hysteresis (80%/60%) + núm mô phỏng áp lực (`/adaptive/simulate`) + status endpoint áp dụng hysteresis**, software_executor query MongoDB ciphertext thật, **Router-side đẩy ciphertext sang TEE** (`fetch_vien_phi_ciphertexts` + `ecall.query(ciphertexts=...)`, bật bằng `ROUTER_TEE_PUSH_CIPHERTEXT=1`), smoke mTLS pass.
 - ✅ Crypto/KMS: DTE/ORE/GCM/ECC, Vault, KMS API, generate_ehr.
 - ✅ Enclave (local, qua Drive): Gramine manifest ký SGX, DuckDB, AES-NI bench, Prometheus/Grafana.
-- ✅ **Mắt xích đã hoàn thành (phía Lan):** Pool đã nhận `ciphertexts`, giải mã AES-GCM trong enclave và thực thi aggregate trên DuckDB in-memory (không còn phụ thuộc `MOCK_PATIENT_DATA` cho luồng này). RA-TLS/attestation và Vault production integration vẫn cần hoàn thiện. (Xem PROJECT.md §4, §5.5.)
+- ✅ **Mắt xích đã hoàn thành (phía Lan):** Pool đã nhận `ciphertexts`, giải mã AES-GCM trong enclave và thực thi aggregate trên DuckDB in-memory (không còn phụ thuộc `MOCK_PATIENT_DATA` cho luồng này). Attestation hiện là signed simulation; Vault production integration vẫn cần hoàn thiện. (Xem PROJECT.md §4, §5.5.)
 
 > Khi sửa code làm thay đổi các mục trên: nhớ cập nhật **cả PROJECT.md và CLAUDE.md**.
 
@@ -88,8 +89,10 @@ python3 crypto/data/generate_ehr.py
 - `tests/test_e2e.py`: 7/7 passed against live stack ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
 - `tests/attack_bipartite.py`: upgraded to reproducible rank-linkage evaluation (`attack_results.json` + optional `attack_chart.png`) ✅
+- `make smoke-local`: local end-to-end mTLS smoke pass ✅
 - `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅
+- `tests/test_adaptive.py`: live adaptive endpoint verified via `/adaptive/simulate` fallback/restore ✅
 
 Note: these runs were executed locally (non-Docker) with MongoDB seeded from `crypto/data/generate_ehr.py`.

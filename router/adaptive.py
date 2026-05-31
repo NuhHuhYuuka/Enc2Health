@@ -95,9 +95,12 @@ class AdaptiveController:
         print(f"[Adaptive] RESTORED to TEE mode — {entry['timestamp']} — {entry['reason']}")
 
     def get_status(self) -> dict:
-        saturated, pressure, source = self._signal()
+        with self._lock:
+            saturated, pressure, source = self._signal()
+            self._apply_hysteresis(saturated, pressure, source)
+            mode = self.mode.value
         return {
-            "system_mode": self.mode.value,
+            "system_mode": mode,
             "pressure_ratio": pressure,
             "epc_threshold": EPC_THRESHOLD,
             "restore_threshold": EPC_RESTORE_THRESHOLD,

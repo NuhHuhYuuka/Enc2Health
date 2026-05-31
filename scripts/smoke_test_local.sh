@@ -83,12 +83,31 @@ echo "[smoke-local] Using AUTH_JWT_SECRET=${AUTH_JWT_SECRET}"
 
 # Start local mongod if available and mode allows it
 STARTED_LOCAL_MONGO=0
-if command -v mongod >/dev/null 2>&1 && [[ "$REQUESTED_DATA_MODE" != "mock" ]]; then
+MONGO_PORT_OPEN=0
+if python3 - <<PY >/dev/null 2>&1
+import socket
+sock = socket.socket()
+sock.settimeout(1)
+try:
+    sock.connect(("127.0.0.1", int(${MONGO_PORT})))
+    raise SystemExit(0)
+except Exception:
+    raise SystemExit(1)
+finally:
+    sock.close()
+PY
+then
+  MONGO_PORT_OPEN=1
+fi
+
+if command -v mongod >/dev/null 2>&1 && [[ "$REQUESTED_DATA_MODE" != "mock" && "$MONGO_PORT_OPEN" -eq 0 ]]; then
   echo "[smoke-local] starting temporary mongod at ${MONGO_PORT}, dbpath=${DBPATH}"
   mkdir -p "$DBPATH"
   mongod --port "$MONGO_PORT" --dbpath "$DBPATH" --bind_ip 127.0.0.1 --quiet &
   MONGOD_PID=$!
   STARTED_LOCAL_MONGO=1
+elif [[ "$MONGO_PORT_OPEN" -eq 1 ]]; then
+  echo "[smoke-local] using already-running MongoDB on 127.0.0.1:${MONGO_PORT}"
 fi
 
 if [[ ! -d "$VENV_DIR" ]]; then
@@ -152,16 +171,33 @@ else
   echo "[smoke-local] skipping seeding. ECALL pool will use mock dataset."
 fi
 
-echo "[smoke-local] starting ecall task pool (with TLS, data_mode=$EFFECTIVE_DATA_MODE)"
-T8_POOL_HOST=127.0.0.1 T8_POOL_PORT=9091 T8_POOL_DATA_MODE="$EFFECTIVE_DATA_MODE" MONGO_URI=${MONGO_URI} \
-  T8_SSL_CERT="$T8_SSL_CERT" T8_SSL_KEY="$T8_SSL_KEY" T8_SSL_CA="$T8_SSL_CA" \
-  "$VENV_PY" enclave/ecall_pool.py &
-ECALL_PID=$!
+POOL_HEALTH_OK=0
+if curl -sSf --cacert "$T8_SSL_CA" --cert "$ROUTER_CLIENT_CERT" --key "$ROUTER_CLIENT_KEY" \
+  https://127.0.0.1:9091/health >/dev/null 2>&1; then
+  POOL_HEALTH_OK=1
+  echo "[smoke-local] reusing already-running ECALL pool on 127.0.0.1:9091"
+fi
 
-echo "[smoke-local] starting router (uvicorn)"
-ECALL_POOL_URL="$ECALL_POOL_URL" ROUTER_CLIENT_CERT="$ROUTER_CLIENT_CERT" ROUTER_CLIENT_KEY="$ROUTER_CLIENT_KEY" T8_SSL_CA="$T8_SSL_CA" \
-  "$VENV_PY" -m uvicorn router.main:app --host 127.0.0.1 --port 8000 &
-ROUTER_PID=$!
+if [[ "$POOL_HEALTH_OK" -ne 1 ]]; then
+  echo "[smoke-local] starting ecall task pool (with TLS, data_mode=$EFFECTIVE_DATA_MODE)"
+  T8_POOL_HOST=127.0.0.1 T8_POOL_PORT=9091 T8_POOL_DATA_MODE="$EFFECTIVE_DATA_MODE" MONGO_URI=${MONGO_URI} \
+    T8_SSL_CERT="$T8_SSL_CERT" T8_SSL_KEY="$T8_SSL_KEY" T8_SSL_CA="$T8_SSL_CA" \
+    "$VENV_PY" enclave/ecall_pool.py &
+  ECALL_PID=$!
+fi
+
+ROUTER_HEALTH_OK=0
+if curl -sSf http://127.0.0.1:8000/health >/dev/null 2>&1; then
+  ROUTER_HEALTH_OK=1
+  echo "[smoke-local] reusing already-running Router on 127.0.0.1:8000"
+fi
+
+if [[ "$ROUTER_HEALTH_OK" -ne 1 ]]; then
+  echo "[smoke-local] starting router (uvicorn)"
+  ECALL_POOL_URL="$ECALL_POOL_URL" ROUTER_CLIENT_CERT="$ROUTER_CLIENT_CERT" ROUTER_CLIENT_KEY="$ROUTER_CLIENT_KEY" T8_SSL_CA="$T8_SSL_CA" \
+    "$VENV_PY" -m uvicorn router.main:app --host 127.0.0.1 --port 8000 &
+  ROUTER_PID=$!
+fi
 
 echo "[smoke-local] waiting for router health"
 for i in {1..30}; do

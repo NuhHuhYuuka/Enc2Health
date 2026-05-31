@@ -126,7 +126,7 @@ class EcallClient:
     def query(
         self,
         query_type: str,
-        filters: dict = {},
+        filters: Optional[dict] = None,
         role: str = "doctor",
         ciphertexts: Optional[list] = None,
     ) -> Optional[dict]:
@@ -139,6 +139,9 @@ class EcallClient:
 
         Returns: dict kết quả hoặc None nếu lỗi
         """
+        if filters is None:
+            filters = {}
+
         payload = {
             "query_type": query_type,
             "filters": filters,

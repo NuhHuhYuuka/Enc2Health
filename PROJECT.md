@@ -16,9 +16,9 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 |---|---|---|---|
 | Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | 🚧 Chưa nối vào luồng query thật |
 | Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + Router-side đẩy ciphertext sang TEE (chờ Pool nhận) |
-| TEE Enclave + Observability (Gramine, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Enclave giải mã AES-GCM từ ciphertext (Pool) + DuckDB in-memory; RA-TLS/attestation còn pending |
+| TEE Enclave + Observability (Gramine simulation, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Enclave giải mã AES-GCM từ ciphertext (Pool) + DuckDB in-memory; attestation ở chế độ signed simulation |
 
-> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass. Phần TEE đã được nối dây cơ bản: Router có thể đẩy `vien_phi_enc` → Pool nhận ciphertexts, Pool giải mã AES-GCM và chạy aggregate trên DuckDB in-memory. Việc còn lại là chuẩn hoá RA-TLS/attestation và production Vault integration.
+> **Khoảng trống lớn nhất (hiện tại):** Router đã query thật ở SOFTWARE mode và luồng mTLS local đã chạy pass. Phần TEE đã được nối dây cơ bản: Router có thể đẩy `vien_phi_enc` → Pool nhận ciphertexts, Pool giải mã AES-GCM và chạy aggregate trên DuckDB in-memory. Attestation hiện là **signed simulation** (HMAC + freshness), còn production SGX/DCAP và Vault integration vẫn là bước tiếp theo.
 
 ---
 
@@ -43,7 +43,7 @@ Client (doctor / admin / researcher) + JWT
 │   DuckDB AVG/SUM        │     │   equality / range trên cipher│
 │   AES-GCM decrypt       │     └──────────────────────────────┘
 └─────────────────────────┘
-     │ RA-TLS (stub) + DEK
+     │ Signed attestation (HMAC simulation) + DEK
      ▼
 ┌─────────────────────────┐
 │ HashiCorp Vault (:8200) │  Envelope Encryption, keypair/khoa, DEK
@@ -69,7 +69,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
 | TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` (mock) + `enclave_service.py` (DuckDB real) | ⚠️ Router-side xong; Pool cần nhận `ciphertexts` (Lan) |
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` + `router/resource_monitor.py` | ✅ logic + đọc RSS/EPC thật từ `/proc` |
-| Router lấy DEK từ Vault sau RA-TLS | `ecall_client.py` + `vault_client.py` | ⚠️ Attestation đang ở chế độ signed simulation (HMAC + freshness), chưa phải SGX quote/DCAP thật |
+| Router lấy DEK từ Vault sau attestation | `ecall_client.py` + `vault_client.py` | ⚠️ Attestation đang ở chế độ signed simulation (HMAC + freshness), chưa phải SGX quote/DCAP thật |
 | Đánh giá hiệu năng overhead < 2x | `tests/benchmark.py` (TEE ~2x Software) | ✅ |
 | q-leakage đo rò rỉ khi fallback | `tests/leakage.py` + `tests/attack_bipartite.py` | ✅ tách được TEE/RBAC masked vs software fallback raw |
 | Grafana real-time | `enclave/monitoring/` (Prometheus + Grafana + exporter) | ✅ |
@@ -122,7 +122,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ### 3.4. Tests & Benchmark (chung)
 - ✅ **Unit tests (T3)** — `tests/test_router.py` (Router/RBAC/Cost Model).
 - ✅ **E2E tests (T10)** — `tests/test_e2e.py` (7 ca: full flow, mask, 403, software mode, filter) — verify đối chiếu MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa live.
-- ✅ **EPC saturation (T7)** — `tests/test_adaptive.py` (20 thread đồng thời).
+- ✅ **EPC saturation (T7)** — `tests/test_adaptive.py` (live endpoint + `/adaptive/simulate` fallback/restore).
 - ✅ **Benchmark 3 mode (T11)** — `tests/benchmark.py` → `benchmark_results.json` (TEE ~2× Software).
 - ✅ **Concurrent clients (T12)** — `tests/benchmark_concurrent.py` (1→5→10→20→50, 0% error) → `concurrent_results.json`.
 - ✅ **q-leakage entropy (T13)** — `tests/leakage.py` → `leakage_results.json`.
@@ -140,12 +140,13 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ⚠️ **Vault runtime:** Pool cố gắng lấy DEK từ Vault nếu có (fallback về local key files khi không có Vault token). Việc chuẩn hoá Vault production integration và RA-TLS/attestation vẫn chưa hoàn tất.
 
 ### 4.2. 🟠 Bảo mật / Attestation
-- 🚧 **RA-TLS là stub.** `/attest` trả `mock-sgx-quote`, `mock-mrenclave`. → Cần quote thật (gramine-sgx + DCAP) hoặc ít nhất giải thích rõ "simulation" trong báo cáo.
+- ✅ **Attestation đã chuyển sang signed simulation.** `/attest` trả document có chữ ký HMAC + freshness; production SGX quote/DCAP vẫn còn pending.
 - ⚠️ **mTLS đã chạy pass ở local/compose smoke, nhưng chưa là mặc định cho mọi mode chạy tay.** Cần chuẩn hóa để TLS bật mặc định giữa Router ↔ Pool ↔ Vault trong profile production.
 - ✅ **q-leakage đã phân biệt TEE vs Fallback.** `tests/leakage.py` giờ ghi riêng `TEE_mode_researcher_masked` và `SOFTWARE_fallback_researcher_raw`, nên `leakage_results.json` đã cho thấy output exposure tăng rõ khi fallback.
 
 ### 4.3. 🟡 Tính nhất quán & dữ liệu
 - ✅ **Mã bệnh ICD-10 đã đồng bộ mặc định.** Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
+- ✅ **Duplicate handoff test file đã xoá.** Chỉ giữ một bản `test_ecall_pool.py` để tránh xung đột collect pytest.
 - ✅ **Probe RSS/EPC thật (best-effort).** `router/resource_monitor.py` đọc RSS thật từ `/proc/<pid>/status`, cố gắng nhận diện EPC từ `/proc/<pid>/smaps`, và `router/probing.py` đẩy snapshot ra `/metrics` / file JSON.
 - 🚧 **DBMS chưa thống nhất.** Kịch bản + README + `generate_ehr.py` = **MongoDB**; ảnh topology ghi **Postgres/CockroachDB**. → Chốt MongoDB, sửa lại ảnh topology cho khớp.
 - ✅ **Fallback đã dùng đúng cột ORE/DTE.** Khi Adaptive chuyển TEE→SOFTWARE, `main.py` gọi `software_executor` query cột DTE (`ma_benh_enc`) + ORE (`tuoi_enc`) trên MongoDB. Với `SOFTWARE_STRICT_MODE=1`, lỗi hạ tầng sẽ fail-fast thay vì rơi về mock.
@@ -175,7 +176,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 7. **Kịch bản "đợt dịch" demo** — script bơm tải → quan sát fallback tự động trên Grafana → phục hồi; lưu screenshot/log cho báo cáo.
 
 ### Sprint 3 — Hoàn thiện & trình bày
-8. **Bật mTLS mặc định** giữa các service; nâng `/attest` lên RA-TLS thật nếu có phần cứng SGX, hoặc ghi rõ giới hạn "Gramine simulation".
+8. **Bật mTLS mặc định** giữa các service; nếu có phần cứng SGX thì nâng attestation từ signed simulation lên RA-TLS thật.
 9. **`docker-compose` toàn stack** + `make up` một lệnh.
 10. **Sửa ảnh topology** cho khớp MongoDB; cập nhật README + PROJECT.md.
 11. **Báo cáo cuối**: gom benchmark (overhead <2×), concurrent (50 client 0% lỗi), attack (DTE 50% vs TEE 0%), leakage fallback.
@@ -187,13 +188,13 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 **Đã xong (chạy thật):** routing operator, cost model, RBAC + mask, JWT, probing + resource_monitor (RSS/EPC thật), adaptive fallback, ecall_client (mTLS+JWT), **software_executor query MongoDB ciphertext thật**, smoke mTLS local pass.
 
 **Đã hoàn thành đợt này (2026-05-30):**
-1. ✅ **TEE path — Router → Pool end-to-end (basic):** `software_executor.fetch_vien_phi_ciphertexts(filters)` gom bản mã `vien_phi_enc` từ MongoDB; `main.py` (khi bật `ROUTER_TEE_PUSH_CIPHERTEXT=1`) gửi batch ciphertexts qua `ecall_client.query(..., ciphertexts=...)`. `ecall_pool` hiện nhận `ciphertexts`, giải mã AES-GCM và trả aggregate (DuckDB in-memory). RA-TLS/attestation vẫn pending.
+1. ✅ **TEE path — Router → Pool end-to-end (basic):** `software_executor.fetch_vien_phi_ciphertexts(filters)` gom bản mã `vien_phi_enc` từ MongoDB; `main.py` (khi bật `ROUTER_TEE_PUSH_CIPHERTEXT=1`) gửi batch ciphertexts qua `ecall_client.query(..., ciphertexts=...)`. `ecall_pool` hiện nhận `ciphertexts`, giải mã AES-GCM và trả aggregate (DuckDB in-memory). Attestation hiện là signed simulation.
 2. ✅ **Cost model dùng số record THẬT + so sánh 2 mode.** Bỏ `n_records=1000` hard-code; `main.py` lấy `n_records` thật từ kết quả rồi gọi `compare_costs(n)` → trả `cost_estimate` gồm cả C_soft, C_TEE, `cheaper_mode`, `tee_over_software_ratio`. (Routing vẫn theo operator + saturation để giữ ràng buộc bảo mật; cost dùng cho observability/justify.)
 3. ✅ **C_soft nối số liệu thật của Long.** `cost_model.py` đọc `crypto/benchmark/c_soft_metrics.json` (AES-SIV/OPE encrypt avg) thay cho `C_SOFT_BASE_MS=0.5`; fallback hằng số nếu thiếu file.
 4. ✅ **Mở rộng routing operator.** `query_router.py` thêm `count_distinct→TEE`, `group_by/join/equality/range→SOFTWARE` đúng kịch bản (`=, JOIN, GROUP BY, COUNT → Software`; `SUM, AVG, COUNT DISTINCT → TEE`).
 
 **Còn lại phía Router:**
-5. ✅ **Cơ chế tự thích nghi — demo + kiểm thử được.** Thêm núm mô phỏng áp lực EPC (`set_simulated_pressure`, endpoint `POST /adaptive/simulate?pressure=`), **hysteresis** (fallback ≥80%, restore ≤60% → chống flapping), `scripts/demo_adaptive.py` (kịch bản đợt dịch→fallback→phục hồi, có switch log), và 4 unit test tất định cho state machine (không cần pool). Status `/adaptive` giờ trả `pressure_ratio`, `epc_threshold`, `restore_threshold`, `saturated`, `pressure_source`.
+5. ✅ **Cơ chế tự thích nghi — demo + kiểm thử được.** Thêm núm mô phỏng áp lực EPC (`set_simulated_pressure`, endpoint `POST /adaptive/simulate?pressure=`), **hysteresis** (fallback ≥80%, restore ≤60% → chống flapping), `scripts/demo_adaptive.py` (kịch bản đợt dịch→fallback→phục hồi, có switch log), và 4 unit test tất định cho state machine (không cần pool). Status `/adaptive` giờ áp dụng hysteresis trước khi trả `pressure_ratio`, `epc_threshold`, `restore_threshold`, `saturated`, `pressure_source`.
 6. ⚠️ **Cost-driven routing (tùy chọn).** Hiện cost chỉ surface để quan sát; nếu muốn để cost *thực sự điều khiển* fallback (proactive) thì cần thống nhất với ràng buộc bảo mật — toán tử nhạy cảm (AVG/SUM) không được tự ý hạ xuống Software vì rò rỉ.
 
 ---
@@ -242,6 +243,8 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 - `tests/test_e2e.py`: 7/7 passed against live stack ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
 - `tests/attack_bipartite.py`: rank-linkage evaluation generated `attack_results.json` ✅
+- `make smoke-local`: local end-to-end mTLS smoke pass với Mongo + Router + Pool ✅
+- `tests/test_adaptive.py`: live adaptive endpoint verified via `/adaptive/simulate` fallback/restore ✅
 - `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅

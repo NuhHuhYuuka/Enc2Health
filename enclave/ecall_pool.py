@@ -24,13 +24,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Add project root early so package imports resolve when running this file directly.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# This file lives at repo_root/enclave/ecall_pool.py, so parents[1] is the repo root.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI, HTTPException, Request
 # Import shared auth helpers from project `common/auth.py` without requiring a package import
 import importlib.util
-common_auth_path = Path(__file__).resolve().parents[2] / "common" / "auth.py"
+common_auth_path = REPO_ROOT / "common" / "auth.py"
 if common_auth_path.exists():
     spec = importlib.util.spec_from_file_location("common.auth", str(common_auth_path))
     _common = importlib.util.module_from_spec(spec)
@@ -113,9 +115,9 @@ def _load_runtime_keys() -> None:
         "ore_key": "ore_key",
     }
     local_key_files = {
-        "gcm_dek": Path(__file__).resolve().parents[2] / "crypto" / "data" / "keys" / "gcm_dek.key",
-        "dte_ma_benh": Path(__file__).resolve().parents[2] / "crypto" / "data" / "keys" / "dte_ma_benh.key",
-        "ore_key": Path(__file__).resolve().parents[2] / "crypto" / "data" / "keys" / "ore.key",
+        "gcm_dek": REPO_ROOT / "crypto" / "data" / "keys" / "gcm_dek.key",
+        "dte_ma_benh": REPO_ROOT / "crypto" / "data" / "keys" / "dte_ma_benh.key",
+        "ore_key": REPO_ROOT / "crypto" / "data" / "keys" / "ore.key",
     }
 
     for key_name, vault_key_name in runtime_keys.items():

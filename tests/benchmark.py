@@ -27,8 +27,10 @@ except ImportError:
 ROUTER_URL = "http://localhost:8000"
 RUNS = 50  # số lần lặp mỗi query
 
-def run_query(client: httpx.Client, query_type: str, role: str, filters: dict = {}) -> float:
+def run_query(client: httpx.Client, query_type: str, role: str, filters: dict | None = None) -> float:
     """Chạy 1 query, trả về latency ms."""
+    if filters is None:
+        filters = {}
     t0 = time.perf_counter()
     token = os.environ.get("AUTH_JWT")
     if not token:
@@ -50,13 +52,15 @@ def run_query(client: httpx.Client, query_type: str, role: str, filters: dict = 
         return -1.0
     return elapsed
 
-def benchmark(label: str, query_type: str, role: str, filters: dict = {}):
+def benchmark(label: str, query_type: str, role: str, filters: dict | None = None):
     """Chạy RUNS lần, tính avg/p95/p99.
 
     Cải tiến: thêm warmup (giảm ảnh hưởng thiết lập kết nối), reuse
     httpx.Client, và tính quantile/QPS chính xác hơn.
     """
     print(f"\n[Benchmark] {label} ...")
+    if filters is None:
+        filters = {}
     WARMUP = min(5, RUNS // 5)
     latencies = []
     with httpx.Client() as client:

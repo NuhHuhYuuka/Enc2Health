@@ -38,7 +38,7 @@ Client (doctor / admin / researcher)
    ┌─────────────────┬──────────────────┐
    │                 │                  │
 Software Mode     TEE Mode          Fallback
-(DTE/ORE)       (SGX Enclave)    (EPC > 80%)
+(DTE/ORE)   (Gramine simulation)  (EPC > 80%)
 =, JOIN, COUNT    SUM, AVG        → Software
 GROUP BY          COUNT DISTINCT
         ↑
@@ -48,7 +48,7 @@ GROUP BY          COUNT DISTINCT
 | Operator | Mode | Lý do |
 |---|---|---|
 | `=`, `JOIN`, `GROUP BY`, `COUNT` | Software (DTE/ORE) | Equality-preserving, nhanh |
-| `SUM`, `AVG`, `COUNT DISTINCT` | TEE Enclave | Cần tính toán bảo mật |
+| `SUM`, `AVG`, `COUNT DISTINCT` | TEE Enclave / Gramine simulation | Cần tính toán bảo mật |
 | EPC > 80% (latency ≥ 2× baseline) | Fallback → Software | Adaptive switching tự động |
 
 ---
@@ -86,11 +86,12 @@ GROUP BY          COUNT DISTINCT
   <img src="attack_chart.png" alt="Attack Results" width="60%"/>
 </div>
 
-| Mode | Value Recovery Rate | Row Recovery Rate |
+| Evaluation | Metrics | Ý nghĩa |
 |---|---|---|
-| DTE Software | **50%** ← dễ bị tấn công | **75%** |
-| TEE Enclave | **0%** ← không thể tấn công | **0%** |
-| Hybrid Adaptive | ~15% (chỉ equality leak) | ~20% |
+| Synthetic rank-linkage | `exact_recovery_rate`, `within_2_years_rate`, `mae` | Mô phỏng ORE bảo toàn thứ tự để đo khả năng phục hồi tuổi từ rank/quantile |
+| Real Mongo leakage profile | `unique_ratio`, `top_ciphertext_frequencies` | Đo mức phân biệt của `tuoi_enc` trên ciphertext thật khi không có plaintext labels |
+
+> `attack_bipartite.py` là benchmark tái liên kết theo thứ hạng: nhánh synthetic mô phỏng ORE bảo toàn thứ tự để attacker suy diễn tuổi từ rank/quantile; nhánh Mongo thật chỉ báo cáo leakage profile khi không có plaintext age labels.
 
 ---
 
@@ -201,10 +202,10 @@ python3 tests/benchmark_concurrent.py
 # Q-leakage mode-aware analysis (T13)
 python3 tests/leakage.py
 
-# Bipartite Matching Attack — DTE frequency leakage (T13)
+# Bipartite Matching Attack — rank-linkage / ORE leakage profile (T13)
 python3 tests/attack_bipartite.py
 
-# EPC saturation scenario test — 20 concurrent threads (T7)
+# EPC saturation scenario test — live adaptive fallback/restore via simulation (T7)
 python3 tests/test_adaptive.py
 
 # Vẽ biểu đồ tổng hợp (T14)
@@ -251,16 +252,16 @@ enc2health/
 ├── tests/
 │   ├── test_router.py       # T3  — unit tests 11/11 (Router, RBAC, Cost Model)
 │   ├── test_e2e.py          # T10 — E2E tests 7/7 (Client→Router→Enclave)
-│   ├── test_adaptive.py     # T7  — EPC saturation scenario (20 concurrent threads)
+│   ├── test_adaptive.py     # T7  — live adaptive fallback/restore via simulation
 │   ├── benchmark.py         # T11 — benchmark 3 chế độ (50 runs/mode)
 │   ├── benchmark_concurrent.py  # T12 — concurrent clients 1→5→10→20→50
 │   ├── leakage.py           # T13 — q-leakage entropy analysis
-│   ├── attack_bipartite.py  # T13 — Bipartite Matching Attack (Hungarian algorithm)
+│   ├── attack_bipartite.py  # T13 — Rank-linkage attack + real leakage profile
 │   └── plot_results.py      # T14 — vẽ biểu đồ trade-off
 ├── benchmark_results.json   # kết quả benchmark thô (T11)
 ├── concurrent_results.json  # kết quả concurrent benchmark (T12)
 ├── leakage_results.json     # kết quả leakage analysis (T13)
-├── attack_results.json      # kết quả tấn công (T13)
+├── attack_results.json      # kết quả rank-linkage/leakage (T13)
 ├── enc2health_benchmark.png # biểu đồ latency/QPS/leakage
 └── attack_chart.png         # biểu đồ attack recovery rate
 ```

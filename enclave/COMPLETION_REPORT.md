@@ -627,12 +627,12 @@ num_requests,total_time_s,avg_latency_ms,min_latency_ms,max_latency_ms,throughpu
 ### 4. Thông tin cần thiết
 
 * Module liên quan: `[enclave/ecall_pool.py](./enclave/ecall_pool.py)` và `[benchmark/bench_t8.py](./benchmark/bench_t8.py)`.
-* Note để người nhận query trực tiếp: service chạy tại `http://127.0.0.1:9091`, dùng `POST /query` với body `{"query_type":"avg_vien_phi","filters":{"ma_benh":"DTE001"},"role":"doctor"}`; có thể kiểm tra trạng thái bằng `GET /health`, xem thống kê bằng `GET /stats`, và mở Swagger tại `GET /docs`.
+* Note để người nhận query trực tiếp: service chạy tại `http://127.0.0.1:9091`, dùng `POST /query` với body `{"query_type":"avg_vien_phi","filters":{"ma_benh":"E11"},"role":"doctor"}`; có thể kiểm tra trạng thái bằng `GET /health`, xem thống kê bằng `GET /stats`, và mở Swagger tại `GET /docs`.
 
 ```bash
 curl -X POST http://127.0.0.1:9091/query \
   -H 'Content-Type: application/json' \
-  -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"DTE001"},"role":"doctor"}'
+  -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"E11"},"role":"doctor"}'
 ```
 
 ---

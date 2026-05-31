@@ -27,7 +27,7 @@
     "qps": 46.8
   },
   {
-    "label": "Hybrid Adaptive: avg_vien_phi (filtered DTE001)",
+    "label": "Hybrid Adaptive: avg_vien_phi (filtered E11)",
     "query_type": "avg_vien_phi",
     "runs": 50,
     "avg_ms": 18.278,

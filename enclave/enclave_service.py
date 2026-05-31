@@ -6,6 +6,7 @@ Initializes DuckDB, loads keys, and provides query/decrypt endpoints.
 """
 
 import base64
+import json
 import duckdb
 import logging
 import os
@@ -79,12 +80,18 @@ def decrypt_aes_gcm(ct_b64: str, key_name: str = 'gcm_dek') -> float:
     
     aesgcm = AESGCM(key)
     plaintext = aesgcm.decrypt(nonce, ct, None)
+    plaintext_buf = bytearray(plaintext)
     
     try:
-        value = float(plaintext.decode('utf-8'))
+        decoded = plaintext_buf.decode('utf-8')
+        try:
+            value = float(json.loads(decoded))
+        except Exception:
+            value = float(decoded.strip().strip('"'))
     finally:
         # Zero-fill immediately
-        plaintext[:] = b'\x00' * len(plaintext)
+        plaintext_buf[:] = b'\x00' * len(plaintext_buf)
+        del plaintext_buf
         del plaintext
     
     return value

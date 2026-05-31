@@ -8,8 +8,52 @@
     "ore_order_leakage": true
   },
   "mongo_leakage_profile": {
-    "available": false,
-    "reason": "pymongo missing"
+    "available": true,
+    "n": 100,
+    "unique_ratio": 0.19,
+    "top_ciphertext_frequencies": [
+      [
+        "831346305",
+        6
+      ],
+      [
+        "1056909916",
+        5
+      ],
+      [
+        "68677566",
+        3
+      ],
+      [
+        "691822724",
+        3
+      ],
+      [
+        "700141106",
+        3
+      ],
+      [
+        "787830363",
+        3
+      ],
+      [
+        "759926804",
+        3
+      ],
+      [
+        "470990402",
+        3
+      ],
+      [
+        "134863001",
+        3
+      ],
+      [
+        "685922163",
+        3
+      ]
+    ],
+    "note": "real plaintext age labels unavailable; reporting leakage profile only"
   },
   "conclusion": "Order leakage enables rank-based linkage; strict TEE path avoids exposing plaintext ages."
 }

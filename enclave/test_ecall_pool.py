@@ -31,10 +31,10 @@ TEST_QUERIES = [
         }
     },
     {
-        "name": "sum_vien_phi_DTE001",
+        "name": "sum_vien_phi_E11",
         "query": {
             "query_type": "sum_vien_phi",
-            "filters": {"ma_benh": "DTE001"},
+            "filters": {"ma_benh": "E11"},
             "role": "doctor"
         }
     },
