@@ -32,7 +32,7 @@ common/      # auth.py — JWT HS256 dùng chung
 crypto/      # Long — crypto/{dte,ore,gcm,asym}.py, vault/, kms_api/, data/generate_ehr.py
 tests/       # benchmark, benchmark_concurrent, leakage, attack_bipartite, test_e2e, test_router, test_adaptive
 scripts/     # smoke_test_local.sh, generate_mtls_certs.sh, generate_jwt.py
-docs/        # SMOKE_RUN.md
+docs/        # SMOKE_RUN.md, LIMITATIONS.md (threat model/giới hạn), EVALUATION.md (kết quả)
 enclave/     # ❌ Lan — ĐÃ gitignore (quá nặng), chia sẻ qua Google Drive. Tồn tại local nhưng KHÔNG push.
 ```
 Lớn & gitignore: `enclave/`, `*.archive`, `*.zip` (dump/bundle sinh lại được).
@@ -56,7 +56,7 @@ AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 uvicorn router.main:app --po
 # Tests
 python3 -m pytest tests/test_router.py tests/test_e2e.py -v   # test_e2e tự skip nếu stack chưa live
 python3 tests/benchmark.py && python3 tests/benchmark_concurrent.py
-python3 tests/leakage.py && python3 tests/attack_bipartite.py
+python3 tests/leakage.py && python3 tests/attack_bipartite.py && python3 tests/attack_ore.py
 
 # Sinh dữ liệu EHR mã hóa vào MongoDB (cần MongoDB chạy)
 python3 crypto/data/generate_ehr.py

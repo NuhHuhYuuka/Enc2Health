@@ -1,0 +1,18 @@
+{
+  "n_records": 2000,
+  "baseline_random_guess": {
+    "exact_recovery_rate": 0.0085,
+    "within_2_years_rate": 0.0475,
+    "mae_years": 32.539
+  },
+  "attack_A_distribution_only": {
+    "exact_recovery_rate": 0.3885,
+    "within_2_years_rate": 1.0,
+    "mae_years": 0.668
+  },
+  "attack_B_known_plaintext_10_anchors": {
+    "exact_recovery_rate": 0.2935,
+    "within_2_years_rate": 0.661,
+    "mae_years": 2.1275
+  }
+}

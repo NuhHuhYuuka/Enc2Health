@@ -129,6 +129,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Concurrent clients (T12)** — `tests/benchmark_concurrent.py` (1→5→10→20→50, 0% error) → `concurrent_results.json`.
 - ✅ **q-leakage entropy (T13)** — `tests/leakage.py` → `leakage_results.json`.
 - ✅ **Bipartite Matching Attack (T13)** — `tests/attack_bipartite.py`: rank-linkage evaluation có metric phục hồi (`exact_recovery_rate`, `within_2_years_rate`, `mae`) → `attack_results.json` + `attack_chart.png` (nếu có matplotlib).
+- ✅ **ORE Order-Leakage Attack (T13b)** — `tests/attack_ore.py`: tấn công rò rỉ thứ tự cột `tuoi_enc` (2 kịch bản: chỉ-biết-phân-bố + known-plaintext anchor), so với baseline đoán mò → `attack_ore_results.json`. Self-contained, không cần Mongo.
 - ✅ **Plot tổng hợp (T14)** — `tests/plot_results.py` → `enc2health_benchmark.png`.
 
 ---
@@ -145,6 +146,9 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Attestation đã chuyển sang signed simulation.** `/attest` trả document có chữ ký HMAC + freshness; production SGX quote/DCAP vẫn còn pending.
 - ⚠️ **mTLS đã chạy pass ở local/compose smoke, nhưng chưa là mặc định cho mọi mode chạy tay.** Cần chuẩn hóa để TLS bật mặc định giữa Router ↔ Pool ↔ Vault trong profile production.
 - ✅ **q-leakage đã phân biệt TEE vs Fallback.** `tests/leakage.py` giờ ghi riêng `TEE_mode_researcher_masked` và `SOFTWARE_fallback_researcher_raw`, nên `leakage_results.json` đã cho thấy output exposure tăng rõ khi fallback.
+- ✅ **Tài liệu Giới hạn & Threat Model** — `docs/LIMITATIONS.md`: nêu rõ THẬT vs MÔ PHỎNG (SGX simulation, attestation HMAC, Vault một phần), rò rỉ đã biết (DTE/ORE/access-pattern), giả định, và future work. Artifact trung thực khoa học cho bảo vệ.
+- ✅ **Tổng hợp kết quả đánh giá** — `docs/EVALUATION.md`: gom số liệu THẬT (E2E 7/7, benchmark, concurrent 50/0% lỗi, attack ORE MAE 0.67, q-leakage TEE vs fallback, RBAC/ABAC) — defense-ready cho báo cáo.
+- ✅ **Tấn công ORE order-leakage** — `tests/attack_ore.py` (xem §3.4) đã đóng khoảng trống "mới đánh DTE chưa đánh ORE".
 
 ### 4.3. 🟡 Tính nhất quán & dữ liệu
 - ✅ **Mã bệnh ICD-10 đã đồng bộ mặc định.** Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
@@ -158,7 +162,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - 🚧 **Client-Side Encryption demo (HIS/EMR app)** — kịch bản nói mã hóa tại client; hiện `generate_ehr.py` mã hóa ở phía server-script.
 - 🚧 **Kịch bản dịch bệnh E2E demo** — script mô phỏng "đợt dịch" → EPC bão hòa → fallback → phục hồi, quay video/screenshot cho báo cáo.
 - 🚧 **MongoDB FLE đúng nghĩa** — hiện là "FLE-style" (tự mã hóa cột), chưa dùng driver-level Client-Side FLE của MongoDB.
-- 🚧 **CI / script khởi động một lệnh** — hiện phải chạy tay 2–3 terminal; nên có `docker-compose` hoặc `make up` cho cả stack (Mongo + Vault + Pool + Router + Prometheus + Grafana).
+- ⚠️ **`docker-compose` + `make up` ĐÃ CÓ** (`docker-compose.yml`: certgen, mongodb, seeder, ecall-pool, router; `Makefile`: `up/down/logs/seed/smoke/smoke-local`). Còn lại: **verify `make up` build + chạy E2E full trong container** (chưa kiểm chứng — luồng đã verify hiện là Python-trong-ctf, không phải container).
 
 ---
 
