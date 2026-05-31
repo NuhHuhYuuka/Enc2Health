@@ -1,0 +1,51 @@
+# DuckDB + Gramine Manifest (Simulation Mode - gramine-direct)
+# KHÔNG có sgx.* keys – chỉ dành cho hardware SGX thật
+# Dùng với: gramine-direct python3 enclave_service.py
+
+[loader]
+entrypoint.uri = "file:{{ gramine.libos }}"
+log_level = "error"
+insecure__use_cmdline_argv = true
+
+[libos]
+entrypoint = "{{ python.get_sys_path(gramine.manifest_dir) }}/python3"
+
+[loader.env]
+LD_LIBRARY_PATH = "/lib:/lib64:/usr/lib/x86_64-linux-gnu"
+PATH = "/usr/bin:/bin"
+
+# File system mounts
+[[fs.mounts]]
+path = "/lib"
+uri = "file:{{ gramine.runtimedir() }}"
+
+[[fs.mounts]]
+path = "/lib64"
+uri = "file:/lib64"
+
+[[fs.mounts]]
+path = "/usr/lib/x86_64-linux-gnu"
+uri = "file:/usr/lib/x86_64-linux-gnu"
+
+[[fs.mounts]]
+path = "/usr/bin"
+uri = "file:/usr/bin"
+
+[[fs.mounts]]
+path = "/bin"
+uri = "file:/bin"
+
+[[fs.mounts]]
+path = "/etc"
+uri = "file:/etc"
+
+[[fs.mounts]]
+path = "/tmp"
+uri = "file:/tmp"
+
+[[fs.mounts]]
+path = "/home"
+uri = "file:/home"
+
+# Simulation Mode: KHÔNG cần sgx.enclave_size, sgx.debug, sgx.thread_num, v.v.
+# Những keys sgx.* chỉ được dùng với gramine-sgx trên hardware SGX thật

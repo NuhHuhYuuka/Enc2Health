@@ -1,0 +1,15 @@
+You have chosen to measure elapsed time instead of user CPU time.
+Doing AES-256-GCM for 3s on 16 size blocks: 98568228 AES-256-GCM's in 3.00s
+Doing AES-256-GCM for 3s on 64 size blocks: 71447172 AES-256-GCM's in 3.00s
+Doing AES-256-GCM for 3s on 256 size blocks: 37255392 AES-256-GCM's in 3.00s
+Doing AES-256-GCM for 3s on 1024 size blocks: 12487746 AES-256-GCM's in 3.00s
+Doing AES-256-GCM for 3s on 8192 size blocks: 1812781 AES-256-GCM's in 3.00s
+Doing AES-256-GCM for 3s on 16384 size blocks: 914424 AES-256-GCM's in 3.00s
+version: 3.0.13
+built on: Tue Apr  7 12:05:56 2026 UTC
+options: bn(64,64)
+compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-a6Kur2/openssl-3.0.13=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-a6Kur2/openssl-3.0.13=/usr/src/openssl-3.0.13-0ubuntu3.9 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3
+CPUINFO: OPENSSL_ia32cap=0x7ef8320b078bffff:0x40069c219c97a9
+The 'numbers' are in 1000s of bytes per second processed.
+type             16 bytes     64 bytes    256 bytes   1024 bytes   8192 bytes  16384 bytes
+AES-256-GCM     525697.22k  1524206.34k  3179126.78k  4262483.97k  4950100.65k  4993974.27k
