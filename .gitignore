@@ -3,8 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 
-# ── Toàn bộ folder enclave (Lan gửi code qua Google Drive, không push GitHub) ──
-enclave/
+# Previously excluded `enclave/` (now tracked in repo)
+# (removed to allow committing enclave sources)
 
 # ── Dữ liệu sinh ra / dump & bundle lớn (sinh lại bằng generate_ehr.py) ──
 *.archive
@@ -15,3 +15,4 @@ enclave/
 *:Zone.Identifier
 *.pid
 .local/mongo/
+*.a
