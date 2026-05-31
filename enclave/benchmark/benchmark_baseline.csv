@@ -1,7 +1,0 @@
-metric,value,unit,note
-simulation_load_time,229.85,ms,Archive load time in direct-mode simulation
-memory_footprint_rss_before,12.34,MB,RSS before loading the archive
-memory_footprint_rss_after,55.16,MB,RSS after loading the archive
-memory_footprint_delta,42.83,MB,Process RSS delta during archive load
-query_latency_count_group,2.79,ms,COUNT by khoa_phong_plaintext
-dataset_records,10000,records,Loaded patient_records documents

@@ -1,3 +1,0 @@
-allocator,max_rss_kb,query_latency_ms
-glibc_malloc,46636,70
-jemalloc,43684,40
