@@ -1,13 +1,20 @@
 """
 Vault client cho Enc2Health.
-Cung cấp: get_department_public_key, get_dek, get_private_key (Enclave only)
+Cung cấp: get_department_public_key, get_dek, get_private_key (Enclave only).
+DEK được lưu dưới dạng wrapped ciphertext trong KV-v2 và unwrap qua Vault Transit.
 """
 import os
 import hvac
 import base64
+from datetime import datetime, timezone
 from functools import lru_cache
 
 VAULT_ADDR  = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
+VAULT_TRANSIT_KEY = os.getenv("VAULT_TRANSIT_KEY", "enc2health-transit")
+
+
+def _dek_context(key_name: str) -> str:
+    return base64.b64encode(f"enc2health:dek:{key_name}".encode("utf-8")).decode("ascii")
 
 
 def _login_with_approle(client: hvac.Client) -> str:
@@ -35,6 +42,65 @@ def _client() -> hvac.Client:
     if not c.is_authenticated():
         raise RuntimeError("Vault authentication failed! Check VAULT_ADDR and credentials.")
     return c
+
+
+def _decrypt_wrapped_dek(client: hvac.Client, key_name: str, secret_data: dict) -> bytes:
+    ciphertext = secret_data.get("ciphertext")
+    if not ciphertext:
+        raise RuntimeError(f"Wrapped DEK for {key_name} is missing ciphertext")
+
+    transit_key = secret_data.get("transit_key") or VAULT_TRANSIT_KEY
+    context = secret_data.get("context") or _dek_context(key_name)
+    response = client.write(
+        f"transit/decrypt/{transit_key}",
+        ciphertext=ciphertext,
+        context=context,
+    )
+    plaintext_b64 = response.get("data", {}).get("plaintext")
+    if not plaintext_b64:
+        raise RuntimeError(f"Transit unwrap for {key_name} returned no plaintext")
+    return base64.b64decode(plaintext_b64)
+
+
+def wrap_dek_bytes(raw_key: bytes, key_name: str, transit_key: str | None = None) -> dict:
+    """Wrap raw DEK bytes with Vault Transit and return metadata for KV storage."""
+    client = _client()
+    transit_key = transit_key or VAULT_TRANSIT_KEY
+    response = client.write(
+        f"transit/encrypt/{transit_key}",
+        plaintext=base64.b64encode(raw_key).decode("ascii"),
+        context=_dek_context(key_name),
+    )
+    ciphertext = response.get("data", {}).get("ciphertext")
+    if not ciphertext:
+        raise RuntimeError(f"Transit wrap for {key_name} returned no ciphertext")
+    return {
+        "ciphertext": ciphertext,
+        "transit_key": transit_key,
+        "context": _dek_context(key_name),
+        "wrapped_with": "vault-transit",
+    }
+
+
+def store_wrapped_dek(
+    key_name: str,
+    raw_key: bytes,
+    algorithm: str,
+    purpose: str,
+    transit_key: str | None = None,
+) -> dict:
+    """Store a Transit-wrapped DEK under enc2health/dek/<key_name>."""
+    client = _client()
+    wrapped = wrap_dek_bytes(raw_key, key_name, transit_key=transit_key)
+    wrapped["algorithm"] = algorithm
+    wrapped["purpose"] = purpose
+    wrapped["stored_at"] = datetime.now(timezone.utc).isoformat()
+    client.secrets.kv.v2.create_or_update_secret(
+        path=f"dek/{key_name}",
+        secret=wrapped,
+        mount_point="enc2health",
+    )
+    return wrapped
 
 
 @lru_cache(maxsize=32)
@@ -68,7 +134,12 @@ def get_dek(key_name: str) -> bytes:
         path=f"dek/{key_name}",
         mount_point="enc2health"
     )
-    return base64.b64decode(secret["data"]["data"]["key"])
+    data = secret["data"]["data"]
+    if "ciphertext" in data:
+        return _decrypt_wrapped_dek(c, key_name, data)
+    if "key" in data:
+        return base64.b64decode(data["key"])
+    raise RuntimeError(f"DEK record for {key_name} has no wrapped or plaintext key field")
 
 
 def list_departments() -> list[str]:

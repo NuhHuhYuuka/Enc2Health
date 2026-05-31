@@ -12,6 +12,10 @@ KEY_DIR="$(cd "$(dirname "$0")/../data/keys" && pwd)"
 echo "=== [1/4] Enable KV-v2 secrets engine ==="
 vault secrets enable -path=enc2health kv-v2 2>/dev/null || echo "  Already enabled"
 
+echo "=== [1b/4] Enable Vault Transit engine ==="
+vault secrets enable -path=transit transit 2>/dev/null || echo "  Already enabled"
+vault write -f transit/keys/enc2health-transit >/dev/null
+
 echo "=== [2/4] Upload keypairs cho từng Khoa ==="
 DEPARTMENTS=("Noi" "Ngoai" "Cap_cuu" "Tim_mach" "Than_kinh" "Nhi")
 for dept in "${DEPARTMENTS[@]}"; do
@@ -30,42 +34,61 @@ for dept in "${DEPARTMENTS[@]}"; do
 done
 
 echo "=== [3/4] Upload DEK (AES-GCM) và DTE keys ==="
-vault kv put enc2health/dek/gcm_dek \
-    key=@$KEY_DIR/gcm_dek.key \
-    algorithm="AES-GCM-256" \
-    purpose="lab_and_billing"
+wrap_and_store_dek() {
+  local key_name="$1"
+  local key_file="$2"
+  local algorithm="$3"
+  local purpose="$4"
+  local context_b64
+  local plaintext_b64
+  local ciphertext
+  context_b64=$(printf 'enc2health:dek:%s' "$key_name" | base64 | tr -d '\n')
+  plaintext_b64=$(base64 -d "$key_file" | base64 -w0)
+  ciphertext=$(vault write -field=ciphertext transit/encrypt/enc2health-transit \
+    plaintext="$plaintext_b64" \
+    context="$context_b64")
+  vault kv put enc2health/dek/"$key_name" \
+    ciphertext="$ciphertext" \
+    transit_key="enc2health-transit" \
+    context="$context_b64" \
+    wrapped_with="vault-transit" \
+    algorithm="$algorithm" \
+    purpose="$purpose"
+}
 
-vault kv put enc2health/dek/dte_ma_benh \
-    key=@$KEY_DIR/dte_ma_benh.key \
-    algorithm="AES-SIV-256" \
-    purpose="icd10_equality_search"
+wrap_and_store_dek gcm_dek "$KEY_DIR/gcm_dek.key" "AES-GCM-256" "lab_and_billing"
 
-vault kv put enc2health/dek/dte_khoa \
-    key=@$KEY_DIR/dte_khoa.key \
-    algorithm="AES-SIV-256" \
-    purpose="department_equality_search"
+wrap_and_store_dek dte_ma_benh "$KEY_DIR/dte_ma_benh.key" "AES-SIV-256" "icd10_equality_search"
 
-vault kv put enc2health/dek/ore_key \
-    key=@$KEY_DIR/ore.key \
-    algorithm="OPE-Boldyreva" \
-    purpose="age_date_range_query"
+wrap_and_store_dek dte_khoa "$KEY_DIR/dte_khoa.key" "AES-SIV-256" "department_equality_search"
+
+wrap_and_store_dek ore_key "$KEY_DIR/ore.key" "OPE-Boldyreva" "age_date_range_query"
 
 echo "=== [4/4] Tạo Vault policy cho Enclave (Lan) ==="
 cat <<'POLICY' | vault policy write enclave-policy -
 path "enc2health/keypairs/*" {
   capabilities = ["read"]
 }
-path "enc2health/dek/*" {
+path "enc2health/data/dek/*" {
   capabilities = ["read"]
+}
+path "transit/encrypt/enc2health-transit" {
+  capabilities = ["update"]
+}
+path "transit/decrypt/enc2health-transit" {
+  capabilities = ["update"]
 }
 POLICY
 
 cat <<'POLICY' | vault policy write kms-api-policy -
-path "enc2health/dek/*" {
+path "enc2health/data/dek/*" {
   capabilities = ["read"]
 }
 path "enc2health/keypairs/*/public_key" {
   capabilities = ["read"]
+}
+path "transit/decrypt/enc2health-transit" {
+  capabilities = ["update"]
 }
 POLICY
 

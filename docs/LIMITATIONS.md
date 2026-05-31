@@ -49,7 +49,7 @@ tuân thủ giao thức (không phá hoại dữ liệu) nhưng **tò mò**, có
 | Enclave nhận ciphertext → giải mã AES-GCM → DuckDB SUM/AVG | ✅ **THẬT** (logic) | Chạy trong tiến trình Python, kết quả khớp Mongo (E2E 7/7) |
 | **SGX Enclave (cô lập RAM bằng phần cứng)** | 🟡 **MÔ PHỎNG** | Chạy `gramine-direct` (`remote_attestation = "none"`). **Trong simulation, plaintext VẪN nằm ở RAM thường** — guarantee "admin không đọc được RAM" là *kiến trúc*, **chưa được phần cứng cưỡng chế**. Cần SGX hardware thật để guarantee có hiệu lực. |
 | **Attestation (RA-TLS)** | 🟡 **SIGNED SIMULATION** | `/attest` trả document ký **HMAC + freshness (timestamp)**, KHÔNG phải SGX Quote/DCAP thật. Chống replay cơ bản, nhưng **không chứng minh được danh tính enclave bằng phần cứng**. |
-| Vault (Envelope Encryption / unwrap DEK) | 🟡 **MỘT PHẦN** | Vault có setup (KV, policy); runtime hiện **ưu tiên AppRole** (`VAULT_ROLE_ID` + `VAULT_SECRET_ID` → token → đọc DEK), còn file local chỉ là **fallback dev có chủ ý** khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. Chưa có unwrap DEK-bằng-MK trong luồng chạy. |
+| Vault (Envelope Encryption / unwrap DEK) | ✅ **THẬT** | DEK được wrap bằng Vault Transit lúc setup, KV-v2 chỉ lưu ciphertext wrapped blob + metadata; runtime dùng AppRole (`VAULT_ROLE_ID` + `VAULT_SECRET_ID` → token) để unwrap DEK qua Transit. File local chỉ là **fallback dev có chủ ý** khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. |
 | mTLS giữa các service | 🟡 **TÙY CHỌN** | Có cert + chạy pass ở smoke; **chưa bật mặc định** mọi mode. Không set env → chạy HTTP trần. |
 | Client-side encryption (app bác sĩ) | 🟡 **MÔ PHỎNG** | Kịch bản: client mã hóa trước khi gửi. Thực tế: `generate_ehr.py` mã hóa phía server-script. |
 
@@ -86,7 +86,7 @@ tuân thủ giao thức (không phá hoại dữ liệu) nhưng **tò mò**, có
 |---|---|---|
 | SGX mô phỏng | Chạy trên phần cứng SGX2 thật + `gramine-sgx`, bật EPC thật | Cao (cần hardware) |
 | Attestation HMAC | RA-TLS + DCAP quote thật, verify MRENCLAVE | Cao |
-| Vault chưa runtime | Pool/Router unwrap DEK qua Vault Transit (envelope thật) | Trung bình |
+| Vault Transit hardening | Chính sách rotation, audit, rewrap và monitoring cho DEK/MK trên Vault Transit | Trung bình |
 | mTLS chưa mặc định | Bật TLS mặc định Router↔Pool↔Vault | Thấp |
 | Chưa đánh ORE | `tests/attack_ore.py`: tái dựng rank/xấp xỉ tuổi từ ORE ciphertext | Thấp |
 | q-leakage chưa định lượng chặt | Đo "bit rò thêm" khi fallback (định lượng so sánh) | Trung bình |

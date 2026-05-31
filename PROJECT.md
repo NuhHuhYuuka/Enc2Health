@@ -66,7 +66,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Lâm sàng (mã bệnh, khoa) — DTE AES-SIV, search trên ciphertext | `crypto/crypto/dte.py` (AES-SIV-256, per-field key) | ✅ |
 | Range (tuổi, ngày) — ORE/OPE | `crypto/crypto/ore.py` (Boldyreva OPE qua `pyope`) | ✅ |
 | Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ |
-| KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault transit rotation có) |
+| KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault Transit wrap/unwrap DEK thật) |
 | RBAC/ABAC qua JWT, chính sách theo thuộc tính y tế | `router/rbac.py` + `router/abac.py` + `common/auth.py` | ✅ RBAC role + ABAC dept-scoping (bác sĩ chỉ xem khoa mình) |
 | Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
 | TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` (mock) + `enclave_service.py` (DuckDB real) | ⚠️ Router-side xong; Pool cần nhận `ciphertexts` (Lan) |
@@ -140,7 +140,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Router SOFTWARE/Fallback đã query MongoDB thật.** Đã tích hợp `software_executor.py` vào `router/main.py`; không còn placeholder `{"result": 0.0, ...}`.
 - ✅ **Enclave đã nhận ciphertext và thực thi decrypt trong Pool (Lan).** Router có thể gom `vien_phi_enc` và đẩy batch ciphertexts; `ecall_pool.py` giờ giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` và ingest vào DuckDB in-memory.
 - ✅ **DuckDB đã được tích hợp vào Pool.** `ecall_pool` thực thi `SUM`/`AVG` trên bảng tạm chứa giá trị đã giải mã.
-- ✅ **Vault runtime:** Pool ưu tiên AppRole (`VAULT_ROLE_ID` + `VAULT_SECRET_ID`) để lấy token rồi đọc DEK từ Vault; log đã xác nhận `DEK source: vault` và full-stack E2E (`tests/test_e2e.py`) đã pass với `T8_ALLOW_LOCAL_KEY_FALLBACK=0`. Local key files chỉ còn là fallback dev có chủ ý khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. Phần còn pending là attestation production/RA-TLS, không phải đường lấy DEK từ Vault.
+- ✅ **Vault runtime:** Pool ưu tiên AppRole (`VAULT_ROLE_ID` + `VAULT_SECRET_ID`) để lấy token rồi unwrap DEK qua Vault Transit; log đã xác nhận `DEK source: vault` và full-stack E2E (`tests/test_e2e.py`) đã pass với `T8_ALLOW_LOCAL_KEY_FALLBACK=0`. Local key files chỉ còn là fallback dev có chủ ý khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. Phần còn pending là attestation production/RA-TLS, không phải đường lấy DEK từ Vault.
 
 ### 4.2. 🟠 Bảo mật / Attestation
 - ✅ **Attestation đã chuyển sang signed simulation.** `/attest` trả document có chữ ký HMAC + freshness; production SGX quote/DCAP vẫn còn pending.

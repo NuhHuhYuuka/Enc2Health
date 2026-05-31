@@ -18,11 +18,11 @@
 
 ### 1.1. Verify Vault AppRole runtime (2026-05-31)
 
-Mục tiêu verify: chứng minh Pool nạp DEK từ Vault (AppRole), không âm thầm rơi về local key khi `T8_ALLOW_LOCAL_KEY_FALLBACK=0`.
+Mục tiêu verify: chứng minh Pool nạp DEK từ Vault (AppRole) và unwrap qua Transit, không âm thầm rơi về local key khi `T8_ALLOW_LOCAL_KEY_FALLBACK=0`.
 
 | Kịch bản | Kết quả |
 |---|---|
-| Vault reachable + AppRole hợp lệ + `T8_ALLOW_LOCAL_KEY_FALLBACK=0` | Pool log có `DEK source: vault` và từng key báo `Loaded key from Vault` (`gcm_dek`, `dte_ma_benh`, `ore_key`). |
+| Vault reachable + AppRole hợp lệ + `T8_ALLOW_LOCAL_KEY_FALLBACK=0` | Pool log có `DEK source: vault` và từng key báo `Loaded key from Vault` (`gcm_dek`, `dte_ma_benh`, `ore_key`). Vault KV chỉ lưu wrapped ciphertext, không lưu plaintext DEK. |
 | Vault không reachable (mô phỏng Vault down bằng `VAULT_ADDR=http://127.0.0.1:18200`) + `T8_ALLOW_LOCAL_KEY_FALLBACK=0` | Pool startup **fail rõ ràng** với `Vault runtime keys unavailable ...` + `Failed to establish a new connection`; không có log local fallback. |
 | E2E pass trên stack thật (MongoDB + Vault) | `tests/test_e2e.py` **7/7 PASSED** khi Router + Pool chạy với `T8_ALLOW_LOCAL_KEY_FALLBACK=0` và Pool log `DEK source: vault`. |
 

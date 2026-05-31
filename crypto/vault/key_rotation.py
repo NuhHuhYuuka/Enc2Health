@@ -8,11 +8,11 @@ from datetime import datetime, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 try:
-    from .vault_client import _client
+    from .vault_client import _client, store_wrapped_dek
 except ImportError:
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    from vault_client import _client
+    from vault_client import _client, store_wrapped_dek
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,25 +24,18 @@ log = logging.getLogger("key_rotation")
 def rotate_gcm_dek() -> dict:
     """
     Xoay vòng DEK AES-GCM.
-    Vault KV-v2 tự động versioning – không cần xóa version cũ ngay.
+    DEK được wrap bằng Vault Transit trước khi ghi vào KV-v2.
     """
-    c = _client()
     new_key = os.urandom(32)
-    new_key_b64 = base64.b64encode(new_key).decode()
-
-    c.secrets.kv.v2.create_or_update_secret(
-        path="dek/gcm_dek",
-        secret={
-            "key": new_key_b64,
-            "algorithm": "AES-GCM-256",
-            "purpose": "lab_and_billing",
-            "rotated_at": datetime.now(timezone.utc).isoformat()
-        },
-        mount_point="enc2health"
+    store_wrapped_dek(
+        key_name="gcm_dek",
+        raw_key=new_key,
+        algorithm="AES-GCM-256",
+        purpose="lab_and_billing",
     )
 
-    log.info("GCM DEK rotated successfully. New version created in Vault.")
-    return {"status": "rotated", "key_preview": new_key_b64[:8] + "..."}
+    log.info("GCM DEK rotated successfully and stored as Transit-wrapped ciphertext.")
+    return {"status": "rotated", "wrapped_with": "vault-transit", "key_name": "gcm_dek"}
 
 
 def rotate_department_keypair(dept: str) -> dict:
