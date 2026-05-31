@@ -8,24 +8,29 @@ import base64
 from functools import lru_cache
 
 VAULT_ADDR  = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
-VAULT_TOKEN = os.getenv("VAULT_TOKEN")
+
+
+def _login_with_approle(client: hvac.Client) -> str:
+    role_id = os.getenv("VAULT_ROLE_ID")
+    secret_id = os.getenv("VAULT_SECRET_ID")
+    if not role_id or not secret_id:
+        raise RuntimeError("No VAULT_TOKEN and no VAULT_ROLE_ID/VAULT_SECRET_ID provided")
+
+    response = client.auth.approle.login(role_id=role_id, secret_id=secret_id)
+    token = response.get("auth", {}).get("client_token")
+    if not token:
+        raise RuntimeError("Vault AppRole login failed (no token returned)")
+    return token
 
 def _client() -> hvac.Client:
     c = hvac.Client(url=VAULT_ADDR)
-    # Prefer explicit token env; otherwise attempt AppRole login
-    if VAULT_TOKEN:
-        c.token = VAULT_TOKEN
+    # Prefer explicit token env; otherwise attempt AppRole login.
+    # AppRole is the production path for enclave startup.
+    vault_token = os.getenv("VAULT_TOKEN")
+    if vault_token:
+        c.token = vault_token
     else:
-        role_id = os.getenv("VAULT_ROLE_ID")
-        secret_id = os.getenv("VAULT_SECRET_ID")
-        if role_id and secret_id:
-            resp = c.auth.approle.login(role_id=role_id, secret_id=secret_id)
-            token = resp.get("auth", {}).get("client_token")
-            if not token:
-                raise RuntimeError("Vault AppRole login failed (no token returned)")
-            c.token = token
-        else:
-            raise RuntimeError("No VAULT_TOKEN and no VAULT_ROLE_ID/VAULT_SECRET_ID provided")
+        c.token = _login_with_approle(c)
 
     if not c.is_authenticated():
         raise RuntimeError("Vault authentication failed! Check VAULT_ADDR and credentials.")

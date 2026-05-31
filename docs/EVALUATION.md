@@ -16,6 +16,19 @@
 
 → Chứng minh luồng: *Client → Router (gom `vien_phi_enc`) → Pool (giải mã AES-GCM trong enclave) → DuckDB (SUM/AVG) → 1 con số*, CSP chỉ thấy ciphertext.
 
+### 1.1. Verify Vault AppRole runtime (2026-05-31)
+
+Mục tiêu verify: chứng minh Pool nạp DEK từ Vault (AppRole), không âm thầm rơi về local key khi `T8_ALLOW_LOCAL_KEY_FALLBACK=0`.
+
+| Kịch bản | Kết quả |
+|---|---|
+| Vault reachable + AppRole hợp lệ + `T8_ALLOW_LOCAL_KEY_FALLBACK=0` | Pool log có `DEK source: vault` và từng key báo `Loaded key from Vault` (`gcm_dek`, `dte_ma_benh`, `ore_key`). |
+| Vault không reachable (mô phỏng Vault down bằng `VAULT_ADDR=http://127.0.0.1:18200`) + `T8_ALLOW_LOCAL_KEY_FALLBACK=0` | Pool startup **fail rõ ràng** với `Vault runtime keys unavailable ...` + `Failed to establish a new connection`; không có log local fallback. |
+| E2E pass trên stack thật (MongoDB + Vault) | `tests/test_e2e.py` **7/7 PASSED** khi Router + Pool chạy với `T8_ALLOW_LOCAL_KEY_FALLBACK=0` và Pool log `DEK source: vault`. |
+
+Ghi chú vận hành:
+- Trong quá trình bring-up ban đầu, mình từng dùng một MongoDB wire-protocol emulator vì chưa có `mongod`/`docker`. Kết quả cuối cùng ghi ở đây là **run thật** trên MongoDB chạy tại `27017` cùng Vault thật, nên đây là bằng chứng cuối cùng cần dùng để đối chiếu trạng thái dự án.
+
 ---
 
 ## 2. Hiệu năng (`tests/benchmark.py`, 50 runs/mode)

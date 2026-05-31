@@ -77,9 +77,11 @@ export T8_SSL_CA="$CERT_DIR/ca.crt"
 export ROUTER_CLIENT_CERT="$CERT_DIR/client.crt"
 export ROUTER_CLIENT_KEY="$CERT_DIR/client.key"
 export ECALL_POOL_URL="https://127.0.0.1:9091"
+export T8_ALLOW_LOCAL_KEY_FALLBACK="${T8_ALLOW_LOCAL_KEY_FALLBACK:-1}"
 
 echo "[smoke-local] certs in $CERT_DIR; T8_SSL_CERT=$T8_SSL_CERT"
 echo "[smoke-local] Using AUTH_JWT_SECRET=${AUTH_JWT_SECRET}"
+echo "[smoke-local] T8_ALLOW_LOCAL_KEY_FALLBACK=${T8_ALLOW_LOCAL_KEY_FALLBACK}"
 
 # Start local mongod if available and mode allows it
 STARTED_LOCAL_MONGO=0

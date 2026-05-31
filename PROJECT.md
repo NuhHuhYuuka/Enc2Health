@@ -20,7 +20,7 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 
 > **🎉 CỘT MỐC — E2E 3 bên đã VERIFY chạy thật (2026-05-31):** `tests/test_e2e.py` **7/7 PASSED** trên stack live (MongoDB + ECALL Pool + Router, `ROUTER_TEE_PUSH_CIPHERTEXT=1`). Kết quả TEE của Router **khớp chính xác** giá trị giải mã từ Mongo → chứng minh luồng *Client → Router (gom `vien_phi_enc`) → Pool (giải mã AES-GCM trong enclave) → DuckDB (SUM/AVG) → 1 con số* hoạt động trên 10k record mã hóa thật, CSP chỉ thấy ciphertext.
 >
-> **Còn lại (nâng cao):** attestation hiện là **signed simulation** (HMAC + freshness) — production SGX/DCAP + Vault runtime integration vẫn là bước tiếp theo; mTLS bật-mặc-định, docker-compose 1 lệnh, sửa ảnh topology (xem §4.4, §5).
+> **Còn lại (nâng cao):** attestation hiện là **signed simulation** (HMAC + freshness) — production SGX/DCAP + RA-TLS vẫn là bước tiếp theo; mTLS bật-mặc-định, docker-compose 1 lệnh, sửa ảnh topology (xem §4.4, §5).
 
 ---
 
@@ -140,7 +140,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Router SOFTWARE/Fallback đã query MongoDB thật.** Đã tích hợp `software_executor.py` vào `router/main.py`; không còn placeholder `{"result": 0.0, ...}`.
 - ✅ **Enclave đã nhận ciphertext và thực thi decrypt trong Pool (Lan).** Router có thể gom `vien_phi_enc` và đẩy batch ciphertexts; `ecall_pool.py` giờ giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` và ingest vào DuckDB in-memory.
 - ✅ **DuckDB đã được tích hợp vào Pool.** `ecall_pool` thực thi `SUM`/`AVG` trên bảng tạm chứa giá trị đã giải mã.
-- ⚠️ **Vault runtime:** Pool cố gắng lấy DEK từ Vault nếu có (fallback về local key files khi không có Vault token). Việc chuẩn hoá Vault production integration và RA-TLS/attestation vẫn chưa hoàn tất.
+- ✅ **Vault runtime:** Pool ưu tiên AppRole (`VAULT_ROLE_ID` + `VAULT_SECRET_ID`) để lấy token rồi đọc DEK từ Vault; log đã xác nhận `DEK source: vault` và full-stack E2E (`tests/test_e2e.py`) đã pass với `T8_ALLOW_LOCAL_KEY_FALLBACK=0`. Local key files chỉ còn là fallback dev có chủ ý khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. Phần còn pending là attestation production/RA-TLS, không phải đường lấy DEK từ Vault.
 
 ### 4.2. 🟠 Bảo mật / Attestation
 - ✅ **Attestation đã chuyển sang signed simulation.** `/attest` trả document có chữ ký HMAC + freshness; production SGX quote/DCAP vẫn còn pending.
@@ -171,7 +171,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ### Sprint 1 — "Nối dây" E2E thật (xương sống của đồ án)
 1. ✅ **`router/software_executor.py`** — đã nối MongoDB ciphertext path cho SOFTWARE mode.
 2. ✅ **Nối Enclave với dữ liệu thật** — Router fetch các `vien_phi_enc` (ciphertext) → POST vào `ecall_pool` → pool giải mã AES-GCM bằng `enclave_service.decrypt_aes_gcm` → ingest vào DuckDB in-memory → `AVG/SUM` (implemented in `enclave/ecall_pool.py`).
-3. ✅ **Load key vào pool lúc startup** — Pool cố gắng lấy DEK từ Vault nếu có, và fallback về local key files; `/health` phản ánh `keys_loaded`.
+3. ✅ **Load key vào pool lúc startup** — Pool ưu tiên Vault AppRole để lấy token và đọc DEK; fallback local chỉ bật khi `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. `/health` phản ánh `keys_loaded`.
 4. **Thống nhất ICD-10** trong cả mock lẫn data thật. ✅ `test_e2e.py` đã được viết lại: verify kết quả Router so với truy vấn MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa chạy — không còn hard-code `n_records == 5`.
 
 → *Định nghĩa "xong": chạy đúng truy vấn mẫu trong kịch bản — "AVG viện phí bệnh nhân E11 trên 60 tuổi" — từ client thật, qua Mongo (DTE+ORE) → Enclave (GCM+DuckDB) → ra 1 con số, CSP chỉ thấy ciphertext.*
@@ -247,6 +247,8 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 
 - `tests/test_router.py`: 30/30 passed ✅
 - `tests/test_e2e.py`: 7/7 passed against live stack ✅
+- `tests/test_e2e.py` (Vault verify run): 7/7 PASSED with `T8_ALLOW_LOCAL_KEY_FALLBACK=0`; Pool log shows `DEK source: vault` ✅
+- `tests/test_e2e.py` (full stack: MongoDB thật + Vault): 7/7 PASSED, `T8_ALLOW_LOCAL_KEY_FALLBACK=0` ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅
 - `tests/attack_bipartite.py`: rank-linkage evaluation generated `attack_results.json` ✅
 - `make smoke-local`: local end-to-end mTLS smoke pass với Mongo + Router + Pool ✅

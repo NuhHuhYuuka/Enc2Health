@@ -76,6 +76,7 @@ POOL_PAYLOAD_BYTES = int(os.environ.get("T8_POOL_PAYLOAD_BYTES", "256"))
 USE_INDEXES = os.environ.get("T8_POOL_USE_INDEXES", "1") != "0"
 DATA_MODE = os.environ.get("T8_POOL_DATA_MODE", "auto").strip().lower()  # auto | mongo | mock
 STRICT_MODE = os.environ.get("T8_STRICT_MODE", "0") == "1"
+ALLOW_LOCAL_KEY_FALLBACK = os.environ.get("T8_ALLOW_LOCAL_KEY_FALLBACK", "0") == "1"
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.environ.get("MONGO_DB", "enc2health")
 MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
@@ -105,10 +106,12 @@ _mongo_collection = None
 _dte_cipher: DTECipher | None = None
 _ore_cipher: ORECipher | None = None
 _keys_loaded = False
+_dek_source = "unknown"
 
 
 def _load_runtime_keys() -> None:
-    """Load runtime keys from Vault first, then fall back to local dev key files."""
+    """Load runtime keys from Vault first; local files are only an explicit dev fallback."""
+    global _dek_source
     runtime_keys = {
         "gcm_dek": "gcm_dek",
         "dte_ma_benh": "dte_ma_benh",
@@ -120,26 +123,42 @@ def _load_runtime_keys() -> None:
         "ore_key": REPO_ROOT / "crypto" / "data" / "keys" / "ore.key",
     }
 
+    missing_keys: list[str] = []
+    source_label: str | None = None
     for key_name, vault_key_name in runtime_keys.items():
         key_bytes = None
         if get_dek is not None:
             try:
                 key_bytes = get_dek(vault_key_name)
+                source_label = source_label or "vault"
                 print(f"[T8 Pool] Loaded key from Vault: {key_name}")
             except Exception as exc:
                 print(f"[T8 Pool] Vault load failed for {key_name}: {exc}")
 
-        if key_bytes is None:
+        if key_bytes is None and ALLOW_LOCAL_KEY_FALLBACK:
             local_path = local_key_files[key_name]
             if local_path.exists():
                 try:
                     key_bytes = base64.b64decode(local_path.read_text().strip())
-                    print(f"[T8 Pool] Loaded key from local dev file: {key_name}")
+                    source_label = source_label or "local_fallback"
+                    print(f"[T8 Pool] Loaded key from local dev file (explicit fallback): {key_name}")
                 except Exception as exc:
                     print(f"[T8 Pool] Local key load failed for {key_name}: {exc}")
+        elif key_bytes is None:
+            missing_keys.append(key_name)
 
         if key_bytes is not None:
             load_key(key_name, key_bytes)
+
+    _dek_source = source_label or "unknown"
+    if missing_keys:
+        raise RuntimeError(
+            "Vault runtime keys unavailable for: "
+            + ", ".join(missing_keys)
+            + ". Provide VAULT_TOKEN or VAULT_ROLE_ID/VAULT_SECRET_ID; set T8_ALLOW_LOCAL_KEY_FALLBACK=1 only for local dev."
+        )
+
+    print(f"[T8 Pool] DEK source: {_dek_source}")
 
     # mark keys_loaded if we have the primary GCM DEK in RAM
     global _keys_loaded
@@ -498,12 +517,10 @@ async def lifespan(app: FastAPI):
     if not mongo_ready:
         if STRICT_MODE:
             raise RuntimeError("T8_STRICT_MODE=1 requires Mongo ciphertext path; mock fallback is disabled")
-        # Do not load the heavy mock dataset into the enclave by default.
-        # Create an empty patient table to avoid accidental plaintext use.
-        enclave_service.register_patient_rows([])
     if STRICT_MODE and not _keys_loaded:
         raise RuntimeError("T8_STRICT_MODE=1 requires gcm_dek loaded at startup")
     print("[T8 Pool] ECALL Task Pool started")
+    print(f"  - DEK source: {_dek_source}")
     print(f"  - Workers: {POOL_WORKERS}")
     print(f"  - Port: {PORT}")
     print(f"  - Records: {'mongo' if mongo_ready else 0} | payload_bytes={POOL_PAYLOAD_BYTES} | indexed={USE_INDEXES}")
@@ -606,6 +623,7 @@ async def stats_endpoint():
         "payload_bytes": POOL_PAYLOAD_BYTES,
         "indexed": USE_INDEXES,
         "keys_loaded": len(_keys),
+        "dek_source": _dek_source,
         "strict_mode": STRICT_MODE,
         "legacy_dte_aliases_enabled": ALLOW_LEGACY_DTE_CODES,
     }

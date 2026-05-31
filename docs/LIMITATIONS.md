@@ -49,7 +49,7 @@ tuân thủ giao thức (không phá hoại dữ liệu) nhưng **tò mò**, có
 | Enclave nhận ciphertext → giải mã AES-GCM → DuckDB SUM/AVG | ✅ **THẬT** (logic) | Chạy trong tiến trình Python, kết quả khớp Mongo (E2E 7/7) |
 | **SGX Enclave (cô lập RAM bằng phần cứng)** | 🟡 **MÔ PHỎNG** | Chạy `gramine-direct` (`remote_attestation = "none"`). **Trong simulation, plaintext VẪN nằm ở RAM thường** — guarantee "admin không đọc được RAM" là *kiến trúc*, **chưa được phần cứng cưỡng chế**. Cần SGX hardware thật để guarantee có hiệu lực. |
 | **Attestation (RA-TLS)** | 🟡 **SIGNED SIMULATION** | `/attest` trả document ký **HMAC + freshness (timestamp)**, KHÔNG phải SGX Quote/DCAP thật. Chống replay cơ bản, nhưng **không chứng minh được danh tính enclave bằng phần cứng**. |
-| Vault (Envelope Encryption / unwrap DEK) | 🟡 **MỘT PHẦN** | Vault có setup (KV, policy); runtime hiện **load key từ file local** `crypto/data/keys/` (Pool thử Vault trước, fallback file). Chưa có unwrap DEK-bằng-MK trong luồng chạy. |
+| Vault (Envelope Encryption / unwrap DEK) | 🟡 **MỘT PHẦN** | Vault có setup (KV, policy); runtime hiện **ưu tiên AppRole** (`VAULT_ROLE_ID` + `VAULT_SECRET_ID` → token → đọc DEK), còn file local chỉ là **fallback dev có chủ ý** khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. Chưa có unwrap DEK-bằng-MK trong luồng chạy. |
 | mTLS giữa các service | 🟡 **TÙY CHỌN** | Có cert + chạy pass ở smoke; **chưa bật mặc định** mọi mode. Không set env → chạy HTTP trần. |
 | Client-side encryption (app bác sĩ) | 🟡 **MÔ PHỎNG** | Kịch bản: client mã hóa trước khi gửi. Thực tế: `generate_ehr.py` mã hóa phía server-script. |
 
