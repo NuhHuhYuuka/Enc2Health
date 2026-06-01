@@ -81,8 +81,8 @@
       </select>
       <div id="deptWrap"><label>Khoa phụ trách</label>
         <select id="dept">
-          <option>Tim_mach</option><option>Noi</option><option>Ngoai</option>
-          <option>Cap_cuu</option><option>Than_kinh</option><option>Nhi</option>
+          <option value="Tim_mach">Tim mạch</option><option value="Noi">Nội</option><option value="Ngoai">Ngoại</option>
+          <option value="Cap_cuu">Cấp cứu</option><option value="Than_kinh">Thần kinh</option><option value="Nhi">Nhi</option>
         </select>
       </div>
       <button class="ghost" onclick="login()">Đăng nhập</button>
@@ -167,6 +167,14 @@ const DISEASE_CODES=[
   ['I25','Bệnh tim thiếu máu cục bộ mạn'],
   ['F32','Trầm cảm'],
 ];
+const DEPT_LABELS={
+  Tim_mach:'Tim mạch',
+  Noi:'Nội',
+  Ngoai:'Ngoại',
+  Cap_cuu:'Cấp cứu',
+  Than_kinh:'Thần kinh',
+  Nhi:'Nhi',
+};
 
 function show(v,el){ for(const id of ['dash','analytics','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
   if(el){document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on')); el.classList.add('on');} }
@@ -182,10 +190,10 @@ async function login(){
   const r=await fetch(API+'/dev/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:ROLE,dept:DEPT})});
   if(!r.ok){alert('Đăng nhập lỗi '+r.status);return;}
   const d=await r.json(); TOKEN=d.token;
-  const names={doctor:'BS. '+(DEPT||''),admin_staff:'NV Hành chính',researcher:'NCV',admin:'Quản trị'};
+  const names={doctor:'BS. '+(DEPT_LABELS[DEPT]||DEPT||''),admin_staff:'NV Hành chính',researcher:'NCV',admin:'Quản trị'};
   document.getElementById('uName').textContent=names[ROLE]||ROLE;
   document.getElementById('uAv').textContent=(names[ROLE]||'U')[0];
-  document.getElementById('scopeLbl').textContent = DEPT?('Khoa '+DEPT):'Toàn bệnh viện';
+  document.getElementById('scopeLbl').textContent = DEPT?('Khoa '+(DEPT_LABELS[DEPT]||DEPT)):'Toàn bệnh viện';
   loadDashboard();
 }
 
@@ -227,7 +235,7 @@ async function runQuery(){
   box.innerHTML=`<div>${badge}</div><div class="result-num">${val==='[MASKED]'?'🔒 Đã ẩn':(typeof val==='number'?val.toLocaleString('vi-VN')+unit:val)}</div>
     <div class="kv"><span>Số bệnh nhân</span><b>${res.n_records??'—'}</b></div>
     <div class="kv"><span>Cột bị ẩn (quyền)</span><b>${(data.masked_fields||[]).join(', ')||'không'}</b></div>
-    <div class="kv"><span>Giới hạn khoa (ABAC)</span><b>${data.abac_scope&&data.abac_scope.khoa_phong?data.abac_scope.khoa_phong:'không'}</b></div>
+    <div class="kv"><span>Giới hạn khoa (ABAC)</span><b>${data.abac_scope&&data.abac_scope.khoa_phong?(DEPT_LABELS[data.abac_scope.khoa_phong]||data.abac_scope.khoa_phong):'không'}</b></div>
     <div class="kv"><span>Độ trễ</span><b>${data.total_latency_ms} ms</b></div>`;
   updateSec(data);
 }
