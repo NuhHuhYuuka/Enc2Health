@@ -249,7 +249,14 @@ class SoftwareExecutor:
         if ObjectId.is_valid(patient_id):
             candidates.append({"_id": ObjectId(patient_id)})
 
-        projection = {"pii_enc": 1, "dept": 1, "khoa_phong_plaintext": 1, "patient_id": 1}
+        projection = {
+            "pii_enc": 1,
+            "dept": 1,
+            "khoa_phong_plaintext": 1,
+            "patient_id": 1,
+            "ma_benh_enc": 1,
+            "chan_doan_enc": 1,
+        }
         record = None
         for query in candidates:
             record = self.collection.find_one(query, projection)
@@ -268,10 +275,19 @@ class SoftwareExecutor:
         if not dept:
             raise RuntimeError(f"Patient record missing department: {patient_id}")
 
+        ma_benh = ""
+        chan_doan = ""
+        if record.get("ma_benh_enc") and self._dte_ma_benh:
+            ma_benh = self._dte_ma_benh.decrypt(record["ma_benh_enc"], b"field:ma_benh")
+        if record.get("chan_doan_enc") and self._gcm:
+            chan_doan = self._gcm.decrypt_json(record["chan_doan_enc"])
+
         return {
             "patient_id": record.get("patient_id", patient_id),
             "pii_enc": record["pii_enc"],
             "dept": dept,
+            "ma_benh": ma_benh,
+            "chan_doan": chan_doan,
         }
 
     def fetch_patient_pii_ciphertext_by_cmnd(self, cmnd: str) -> dict[str, Any]:
@@ -283,7 +299,14 @@ class SoftwareExecutor:
 
         cmnd_dte_ciphertext = self._dte_cmnd.encrypt(cmnd, b"field:cmnd")
 
-        projection = {"pii_enc": 1, "dept": 1, "khoa_phong_plaintext": 1, "patient_id": 1}
+        projection = {
+            "pii_enc": 1,
+            "dept": 1,
+            "khoa_phong_plaintext": 1,
+            "patient_id": 1,
+            "ma_benh_enc": 1,
+            "chan_doan_enc": 1,
+        }
         record = self.collection.find_one({"cmnd_dte": cmnd_dte_ciphertext}, projection)
 
         if record is None:
@@ -298,10 +321,19 @@ class SoftwareExecutor:
         if not dept:
             raise RuntimeError(f"Patient record missing department for CCCD: {cmnd}")
 
+        ma_benh = ""
+        chan_doan = ""
+        if record.get("ma_benh_enc") and self._dte_ma_benh:
+            ma_benh = self._dte_ma_benh.decrypt(record["ma_benh_enc"], b"field:ma_benh")
+        if record.get("chan_doan_enc") and self._gcm:
+            chan_doan = self._gcm.decrypt_json(record["chan_doan_enc"])
+
         return {
             "patient_id": record.get("patient_id"),
             "pii_enc": record["pii_enc"],
             "dept": dept,
+            "ma_benh": ma_benh,
+            "chan_doan": chan_doan,
         }
 
     def keyword_search(self, keyword: str, filters: Dict[str, Any] | None = None, limit: int = 20) -> dict[str, Any]:

@@ -113,6 +113,8 @@ async def handle_query(req: QueryRequest, request: Request):
             "patient_id": pii_ciphertext["patient_id"],
             "dept": pii_ciphertext["dept"],
             "pii": abac.mask_pii(pii_plaintext, role),
+            "ma_benh": pii_ciphertext.get("ma_benh"),
+            "chan_doan": pii_ciphertext.get("chan_doan"),
             "query_type": normalized_query_type,
             "n_records": 1,
         }
@@ -180,7 +182,7 @@ async def handle_search(req: SearchRequest, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    visible_postings = role in {"admin", "doctor"}
+    visible_postings = role in {"admin", "doctor", "admin_staff"}
     response_result = {
         "keyword": search_result["keyword"],
         "count": search_result.get("filtered_records", search_result.get("n_records", 0)),

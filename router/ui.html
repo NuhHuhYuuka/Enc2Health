@@ -311,6 +311,7 @@ function renderPatientDetails(data, targetId){
     <div class="kv stack"><span>Địa chỉ</span><b>${escapeHtml(fmt(pii.dia_chi))}</b></div>
     <div class="kv stack"><span>Tóm tắt bệnh án</span><b>${escapeHtml(fmt(pii.tom_tat_benh_an || '—'))}</b></div>
     <div class="kv stack"><span>Phác đồ điều trị</span><b>${escapeHtml(fmt(pii.phac_do_dieu_tri || '—'))}</b></div>
+    <div class="kv"><span>Chẩn đoán</span><b>${escapeHtml(p.chan_doan || '—')} (${escapeHtml(p.ma_benh || '—')})</b></div>
     <div class="kv"><span>Khoa điều trị</span><b>${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')}</b></div>
     <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')})</b></div>
     <div class="kv"><span>Độ trễ truy vấn</span><b>${escapeHtml(data.total_latency_ms)} ms</b></div>
@@ -424,9 +425,9 @@ function renderSampleCmnds() {
   const samples = [
     {name: 'An Vũ (Khoa Nhi)', cmnd: '03321819600'},
     {name: 'Quang Đức Nguyễn (Khoa Nội)', cmnd: '07816184959'},
-    {name: 'Cô Ngọc Phạm (Khoa Tim mạch)', cmnd: '04131647525'},
+    {name: 'Hải Nguyễn (Khoa Tim mạch)', cmnd: '05641395376'},
     {name: 'Nam Lê (Khoa Cấp cứu)', cmnd: '06542351161'},
-    {name: 'Trung Đức Trần (Khoa Thần kinh)', cmnd: '09283276483'},
+    {name: 'Tùng Nguyễn (Khoa Thần kinh)', cmnd: '01845146270'},
     {name: 'Lâm Phạm (Khoa Ngoại)', cmnd: '08908386379'}
   ];
   document.getElementById('sampleCmnds').innerHTML = samples.map(s => 

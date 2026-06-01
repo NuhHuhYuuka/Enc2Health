@@ -274,3 +274,40 @@ def test_pii_abac_wrong_dept_for_doctor():
         timeout=30,
     )
     assert r.status_code == 403
+
+
+def test_admin_staff_keyword_search_returns_postings_e2e():
+    """Nhân viên hành chính (admin_staff) tìm kiếm bệnh nhân nhận được postings thay vì [MASKED]."""
+    r = httpx.post(
+        f"{ROUTER_URL}/search",
+        json={"keyword": "I01", "limit": 5, "role": "admin_staff"},
+        headers=_headers("admin_staff"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["result"]["postings"] != "[MASKED]"
+    assert len(data["result"]["postings"]) > 0
+
+
+def test_admin_staff_get_patient_pii_unmasked_clinical_masked_e2e():
+    """Nhân viên hành chính (admin_staff) tra cứu bệnh nhân không bị ẩn CCCD/địa chỉ, nhưng bị ẩn bệnh án/phác đồ."""
+    patient = _patient_with_pii("Tim_mach")
+    r = httpx.post(
+        f"{ROUTER_URL}/query",
+        json={"query_type": "get_patient", "patient_id": patient["patient_id"], "role": "admin_staff"},
+        headers=_headers("admin_staff"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    pii = data["result"]["pii"]
+    assert pii["ho_ten"] != "[MASKED]"
+    assert pii["cmnd"] != "[MASKED]"
+    assert pii["dia_chi"] != "[MASKED]"
+    assert pii["ngay_sinh"] != "[MASKED]"
+    assert pii["tom_tat_benh_an"] == "[MASKED]"
+    assert pii["phac_do_dieu_tri"] == "[MASKED]"
+    assert data["result"]["ma_benh"] is not None
+    assert data["result"]["chan_doan"] is not None
+
