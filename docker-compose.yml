@@ -99,6 +99,8 @@ services:
       MONGO_DB: enc2health
       MONGO_COLLECTION: patient_records
       ECALL_POOL_URL: https://ecall-task-pool:9091
+      ROUTER_TEE_PUSH_CIPHERTEXT: ${ROUTER_TEE_PUSH_CIPHERTEXT:-1}
+      ENC2HEALTH_DEV_UI: ${ENC2HEALTH_DEV_UI:-1}
       ROUTER_CLIENT_CERT: /certs/client.crt
       ROUTER_CLIENT_KEY: /certs/client.key
       T8_SSL_CA: /certs/ca.crt

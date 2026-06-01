@@ -97,7 +97,7 @@
       <div class="grid cols-3">
         <div class="card kpi"><div class="ic">👥</div><div class="lbl">Bệnh nhân trong phạm vi</div><div class="val" id="kPat">—</div><div class="sub">trên dữ liệu mã hóa</div></div>
         <div class="card kpi"><div class="ic" style="background:#e7f0fe">💳</div><div class="lbl">Viện phí trung bình</div><div class="val" id="kAvg">—</div><div class="sub" id="kAvgSub">VND</div></div>
-        <div class="card kpi"><div class="ic" style="background:#f1ecfd">🧬</div><div class="lbl">BN Tiểu đường (E11)</div><div class="val" id="kE11">—</div><div class="sub">DTE equality search</div></div>
+        <div class="card kpi"><div class="ic" style="background:#f1ecfd">🧬</div><div class="lbl">BN theo mã E11</div><div class="val" id="kE11">—</div><div class="sub">không phải tổng số bệnh nhân</div></div>
       </div>
       <div class="card" style="margin-top:16px">
         <h2 class="sec">Tỉ trọng bệnh nhân theo nhóm tuổi (ORE range)</h2>
@@ -117,9 +117,11 @@
             <option value="count">Thống kê số bệnh nhân (COUNT)</option>
           </select>
           <div class="row">
-            <div><label>Mã bệnh (ICD-10)</label><input id="mabenh" value="E11" placeholder="E11"></div>
-            <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="60" placeholder="60"></div>
+            <div><label>Mã bệnh (ICD-10)</label><input id="mabenh" value="" placeholder="bỏ trống = tất cả"></div>
+            <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="" placeholder="bỏ trống = mọi tuổi"></div>
           </div>
+          <div class="muted" style="margin-top:10px">COUNT tổng bệnh nhân: để trống mã bệnh và tuổi. Nhập mã bệnh để đếm riêng một nhóm.</div>
+          <div id="diseaseCodes" class="muted" style="margin-top:10px;line-height:1.7"></div>
           <button onclick="runQuery()">▶ Thực hiện phân tích</button>
           <div class="muted" style="margin-top:10px">Hệ thống tự chọn TEE (giải mã trong enclave) hay Software (trên ciphertext) tùy độ nhạy & tải.</div>
         </div>
@@ -155,10 +157,24 @@
 <script>
 const API = (new URLSearchParams(location.search).get('api') || '').replace(/\/+$/,'');
 let TOKEN=null, ROLE=null, DEPT=null;
+const DISEASE_CODES=[
+  ['E11','Đái tháo đường type 2'],
+  ['I10','Tăng huyết áp nguyên phát'],
+  ['J18','Viêm phổi không rõ tác nhân'],
+  ['K29','Viêm dạ dày'],
+  ['M54','Đau lưng'],
+  ['N18','Bệnh thận mạn'],
+  ['I25','Bệnh tim thiếu máu cục bộ mạn'],
+  ['F32','Trầm cảm'],
+];
 
 function show(v,el){ for(const id of ['dash','analytics','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
   if(el){document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on')); el.classList.add('on');} }
 function syncDept(){ document.getElementById('deptWrap').style.display = document.getElementById('role').value==='doctor'?'block':'none'; }
+function setDiseaseCode(code){ document.getElementById('mabenh').value=code; }
+function renderDiseaseCodes(){
+  document.getElementById('diseaseCodes').innerHTML='Mã bệnh mẫu: '+DISEASE_CODES.map(([code,name])=>`<button type="button" class="ghost" style="width:auto;margin:2px 4px 2px 0;padding:5px 8px;font-size:12px" onclick="setDiseaseCode('${code}')" title="${name}">${code}</button>`).join('');
+}
 
 async function login(){
   ROLE=document.getElementById('role').value;
@@ -233,7 +249,7 @@ async function simulate(v){
   document.getElementById('adaptiveBox').innerHTML=`Trạng thái: ${badge} &nbsp;<span class="muted">ngưỡng fallback ${d.epc_threshold*100}% · phục hồi ${d.restore_threshold*100}%</span>`;
 }
 
-syncDept(); login(); simulate(0);
+syncDept(); renderDiseaseCodes(); login(); simulate(0);
 </script>
 </body>
 </html>
