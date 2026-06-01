@@ -99,7 +99,7 @@ def main():
     section("BƯỚC 5 — RBAC: cùng 1 kết quả, mỗi vai trò thấy khác nhau")
     rbac = RBACMiddleware()
     raw = {"result": round(avg), "n_records": n}
-    for role in ("admin", "doctor", "researcher"):
+    for role in ("admin", "doctor", "admin_staff"):
         access = rbac.check(role, query_type)
         if not access.allowed:
             shown = f"❌ BỊ CHẶN 403 ({access.reason})"
@@ -125,7 +125,7 @@ def main():
     print(f"  • CSP (admin cloud) nhìn thấy:  ciphertext (chuỗi vô nghĩa)")
     print(f"  • Bác sĩ nhận về:               1 con số = {avg:,.0f} VND")
     print(f"  • Plaintext:                    chỉ tồn tại trong enclave, rồi biến mất")
-    print(f"  • Researcher:                   bị che (chỉ xem được số tổng hợp đã mask)")
+    print(f"  • NV Hành chính nhận về:        kết quả trung bình (nhưng bị giới hạn chẩn đoán)")
     print()
     print("  Đó chính là câu trả lời của đề tài: bệnh viện phân tích được dữ liệu trên")
     print("  Cloud mà KHÔNG lộ thông tin bệnh nhân cho nhà cung cấp dịch vụ.")

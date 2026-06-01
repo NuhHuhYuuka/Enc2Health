@@ -136,11 +136,11 @@ if __name__ == "__main__":
         filters={"ma_benh": "I01"}
     ))
 
-    # 5. RBAC overhead: researcher (có masking)
+    # 5. RBAC overhead: admin_staff (có masking)
     results.append(benchmark(
-        "Hybrid + RBAC masking: avg (researcher)",
+        "Hybrid + RBAC masking: avg (admin_staff)",
         query_type="avg_vien_phi",
-        role="researcher"
+        role="admin_staff"
     ))
 
     # Lưu kết quả ra JSON

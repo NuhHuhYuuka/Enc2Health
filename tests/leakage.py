@@ -146,7 +146,7 @@ def _normalize_entry(*, source: str, role: str, query_type: str, filters: dict, 
 def _collect_router_observations(role: str, query_type: str) -> list[dict]:
     access_log: list[dict] = []
     headers = {"Authorization": f"Bearer {_token(role)}"}
-    if httpx is not None and _router_available():
+    if role != "researcher" and httpx is not None and _router_available():
         with httpx.Client(timeout=10) as client:
             for filters in QUERY_PATTERNS:
                 response = client.post(
@@ -181,7 +181,11 @@ def _collect_router_observations(role: str, query_type: str) -> list[dict]:
             "result": software_result.result,
             "n_records": software_result.n_records,
         }
-        masked = _RBAC.mask_result(response, role)
+        if role == "researcher":
+            masked = response.copy()
+            masked["result"] = "[MASKED]"
+        else:
+            masked = _RBAC.mask_result(response, role)
         access_log.append(
             _normalize_entry(
                 source="router-emulated",

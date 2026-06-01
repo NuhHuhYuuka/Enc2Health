@@ -86,7 +86,6 @@
       <select id="role" onchange="syncDept()">
         <option value="doctor" selected>Bác sĩ điều trị</option>
         <option value="admin_staff">Nhân viên hành chính</option>
-        <option value="researcher">Nhà nghiên cứu</option>
         <option value="admin">Quản trị hệ thống</option>
       </select>
       <div id="deptWrap"><label>Khoa phụ trách</label>
@@ -120,6 +119,7 @@
       <h2 class="sec">Phân tích lâm sàng</h2>
       <div class="grid cols-2">
         <div class="card">
+          <div id="doctorNotice" class="badge b-403 hide" style="margin-top:0;margin-bottom:12px;width:100%;text-align:center;white-space:normal;line-height:1.5;"></div>
           <label>Nghiệp vụ</label>
           <select id="qtype">
             <option value="avg_vien_phi">Chi phí điều trị trung bình (AVG)</option>
@@ -264,10 +264,19 @@ async function login(){
   const r=await fetch(API+'/dev/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:ROLE,dept:DEPT})});
   if(!r.ok){alert('Đăng nhập lỗi '+r.status);return;}
   const d=await r.json(); TOKEN=d.token;
-  const names={doctor:'BS. '+(DEPT_LABELS[DEPT]||DEPT||''),admin_staff:'NV Hành chính',researcher:'NCV',admin:'Quản trị'};
+  const names={doctor:'BS. '+(DEPT_LABELS[DEPT]||DEPT||''),admin_staff:'NV Hành chính',admin:'Quản trị'};
   document.getElementById('uName').textContent=names[ROLE]||ROLE;
   document.getElementById('uAv').textContent=(names[ROLE]||'U')[0];
   document.getElementById('scopeLbl').textContent = DEPT?('Khoa '+(DEPT_LABELS[DEPT]||DEPT)):'Toàn bệnh viện';
+  
+  const notice = document.getElementById('doctorNotice');
+  if (ROLE === 'doctor') {
+    notice.innerHTML = `⚠️ Bác sĩ chỉ có quyền truy vấn dữ liệu thuộc khoa <b>${DEPT_LABELS[DEPT] || DEPT}</b>. Không có quyền truy cập dữ liệu của khoa khác.`;
+    notice.classList.remove('hide');
+  } else {
+    notice.classList.add('hide');
+  }
+  
   loadDashboard();
 }
 
@@ -442,11 +451,18 @@ async function runQuery(){
   const mode=data.mode, fell=mode!==data.requested_mode, res=data.result||{}, val=res.result;
   const badge=mode==='tee'?'<span class="badge b-tee">🔒 TEE · Enclave</span>':(fell?'<span class="badge b-fall">⚠️ Fallback · Software</span>':'<span class="badge b-soft">Software</span>');
   const unit=(qtype.includes('vien_phi'))?' VND':'';
+  let noticeHtml = '';
+  if (ROLE === 'doctor' && res.n_records === 0) {
+    noticeHtml = `<div class="badge b-403" style="margin-top:12px;width:100%;text-align:center;white-space:normal;line-height:1.5;font-weight:normal;box-sizing:border-box;">
+      ⚠️ Không tìm thấy bệnh nhân nào. Lưu ý: Bác sĩ chỉ có quyền truy vấn dữ liệu thuộc khoa <b>${DEPT_LABELS[DEPT] || DEPT}</b> (không được truy cập khoa khác).
+    </div>`;
+  }
   box.innerHTML=`<div>${badge}</div><div class="result-num">${val==='[MASKED]'?'🔒 Đã ẩn':(typeof val==='number'?val.toLocaleString('vi-VN')+unit:val)}</div>
     <div class="kv"><span>Số bệnh nhân</span><b>${res.n_records??'—'}</b></div>
     <div class="kv"><span>Cột bị ẩn (quyền)</span><b>${(data.masked_fields||[]).join(', ')||'không'}</b></div>
     <div class="kv"><span>Giới hạn khoa (ABAC)</span><b>${data.abac_scope&&data.abac_scope.khoa_phong?(DEPT_LABELS[data.abac_scope.khoa_phong]||data.abac_scope.khoa_phong):'không'}</b></div>
-    <div class="kv"><span>Độ trễ</span><b>${data.total_latency_ms} ms</b></div>`;
+    <div class="kv"><span>Độ trễ</span><b>${data.total_latency_ms} ms</b></div>
+    ${noticeHtml}`;
   updateSec(data);
 }
 

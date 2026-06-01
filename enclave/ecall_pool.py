@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -309,8 +310,17 @@ def _records_for_min_age(min_age: int) -> List[dict]:
     return candidates
 
 
+DEMO_DISEASE_CODE_RE = re.compile(r"^[A-Za-z]\d{2}$")
+
+def canonicalize_disease_code(value: str) -> str:
+    """Keep demo disease-code letters uppercase: p01 -> P01."""
+    text = str(value).strip()
+    return text.upper() if DEMO_DISEASE_CODE_RE.fullmatch(text) else text
+
+
 def _normalize_ma_benh(value: str) -> str:
-    return ICD10_ALIASES.get(value, value)
+    val = canonicalize_disease_code(value)
+    return ICD10_ALIASES.get(val, val)
 
 
 def _query_mock_aggregate(query_type: str, filters: Dict[str, object]) -> Dict[str, object]:
@@ -461,7 +471,7 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
     Execute a medical aggregation query.
     Runs in thread pool to allow concurrent access.
     """
-    allowed_roles = {"doctor", "admin", "researcher", "admin_staff"}
+    allowed_roles = {"doctor", "admin", "admin_staff"}
     if req.role not in allowed_roles:
         raise ValueError(f"Invalid role: {req.role}")
 

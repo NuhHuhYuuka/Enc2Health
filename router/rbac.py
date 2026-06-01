@@ -26,12 +26,6 @@ ROLE_PERMISSIONS = {
         "can_see_ma_benh": False,    # ẩn mã bệnh / chẩn đoán
         "pii_access": "partial",
     },
-    "researcher": {
-        "allowed_query_types": {"avg_vien_phi", "count", "get_patient", "lookup_patient", "keyword_search"},
-        "can_see_vien_phi": False,   # chỉ thấy kết quả aggregate, không thấy raw
-        "can_see_ma_benh": False,    # ẩn mã bệnh
-        "pii_access": "masked",
-    },
 }
 
 @dataclass

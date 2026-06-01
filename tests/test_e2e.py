@@ -151,19 +151,6 @@ def test_doctor_avg_full_flow():
     assert data["result"]["result"] == pytest.approx(expected_avg, rel=1e-9)
 
 
-def test_researcher_avg_masked_e2e():
-    """researcher gọi avg → TEE → kết quả bị mask"""
-    r = httpx.post(
-        f"{ROUTER_URL}/query",
-        json={"query_type": "avg_vien_phi", "filters": {}, "role": "researcher"},
-        headers=_headers("researcher"),
-        timeout=30,
-    )
-    assert r.status_code == 200
-    data = r.json()
-    assert data["result"]["result"] == "[MASKED]"
-    assert "vien_phi" in data["masked_fields"]
-
 
 def test_doctor_sum_blocked_e2e():
     """doctor gọi sum → bị 403"""
@@ -226,23 +213,6 @@ def test_sse_keyword_search_e2e():
     assert lower_data["result"]["count"] == data["result"]["count"]
 
 
-def test_sse_keyword_search_researcher_masks_postings():
-    row = _mongo_collection().database["sse_index"].find_one({"n_records": {"$gt": 0}})
-    if not row:
-        pytest.skip("Mongo dataset has no sse_index records; reseed with updated generate_ehr.py")
-
-    r = httpx.post(
-        f"{ROUTER_URL}/search",
-        json={"keyword": "I01", "limit": 5, "role": "researcher"},
-        headers=_headers("researcher"),
-        timeout=30,
-    )
-    assert r.status_code == 200
-    data = r.json()
-    assert data["result"]["count"] > 0
-    assert data["result"]["postings"] == "[MASKED]"
-    assert "postings" in data["masked_fields"]
-
 
 def test_filter_by_ma_benh():
     """filter theo ma_benh → ít records hơn"""
@@ -292,20 +262,6 @@ def test_pii_decrypt_in_enclave_doctor():
     assert data["result"]["pii"]["ho_ten"] != "[MASKED]"
     assert data["result"]["pii"]["cmnd"] != "[MASKED]"
 
-
-def test_pii_masked_for_researcher():
-    """Researcher được phép lookup nhưng PII bị mask hoàn toàn."""
-    patient = _patient_with_pii()
-    r = httpx.post(
-        f"{ROUTER_URL}/query",
-        json={"query_type": "get_patient", "patient_id": patient["patient_id"], "role": "researcher"},
-        headers=_headers("researcher"),
-        timeout=30,
-    )
-    assert r.status_code == 200
-    pii = r.json()["result"]["pii"]
-    assert pii["ho_ten"] == "[MASKED]"
-    assert pii["cmnd"] == "[MASKED]"
 
 
 def test_pii_abac_wrong_dept_for_doctor():

@@ -1,26 +1,26 @@
 {
   "TEE_mode_admin": {
     "pattern_counts": {
-      "[('ma_benh', 'E11')]": 3,
-      "[('ma_benh', 'I10')]": 2,
-      "[('ma_benh', 'J18')]": 1,
-      "[('ma_benh', 'K29')]": 1,
+      "[('ma_benh', 'I01')]": 3,
+      "[('ma_benh', 'C01')]": 2,
+      "[('ma_benh', 'P01')]": 1,
+      "[('ma_benh', 'S01')]": 1,
       "[]": 2
     },
     "entropy": 2.1972,
     "max_entropy": 2.3219,
     "pattern_leakage_score": 0.0537,
     "output_exposure_score": 1.0,
-    "response_surface_score": 0.625,
+    "response_surface_score": 1.0,
     "leakage_score": 1.0,
     "interpretation": "HIGH leakage"
   },
   "SOFTWARE_mode_admin": {
     "pattern_counts": {
-      "[('ma_benh', 'E11')]": 3,
-      "[('ma_benh', 'I10')]": 2,
-      "[('ma_benh', 'J18')]": 1,
-      "[('ma_benh', 'K29')]": 1,
+      "[('ma_benh', 'I01')]": 3,
+      "[('ma_benh', 'C01')]": 2,
+      "[('ma_benh', 'P01')]": 1,
+      "[('ma_benh', 'S01')]": 1,
       "[]": 2
     },
     "entropy": 2.1972,
@@ -33,10 +33,10 @@
   },
   "TEE_mode_researcher_masked": {
     "pattern_counts": {
-      "[('ma_benh', 'E11')]": 3,
-      "[('ma_benh', 'I10')]": 2,
-      "[('ma_benh', 'J18')]": 1,
-      "[('ma_benh', 'K29')]": 1,
+      "[('ma_benh', 'I01')]": 3,
+      "[('ma_benh', 'C01')]": 2,
+      "[('ma_benh', 'P01')]": 1,
+      "[('ma_benh', 'S01')]": 1,
       "[]": 2
     },
     "entropy": 2.1972,
@@ -49,10 +49,10 @@
   },
   "SOFTWARE_fallback_researcher_raw": {
     "pattern_counts": {
-      "[('ma_benh', 'E11')]": 3,
-      "[('ma_benh', 'I10')]": 2,
-      "[('ma_benh', 'J18')]": 1,
-      "[('ma_benh', 'K29')]": 1,
+      "[('ma_benh', 'I01')]": 3,
+      "[('ma_benh', 'C01')]": 2,
+      "[('ma_benh', 'P01')]": 1,
+      "[('ma_benh', 'S01')]": 1,
       "[]": 2
     },
     "entropy": 2.1972,

@@ -43,7 +43,7 @@ TEST_QUERIES = [
         "query": {
             "query_type": "count",
             "filters": {"tuoi_min_enc": 30},
-            "role": "researcher"
+            "role": "admin_staff"
         }
     },
 ]
@@ -176,7 +176,7 @@ def test_role_access() -> bool:
     print("=" * 70)
     print()
     
-    roles = ["doctor", "admin", "researcher"]
+    roles = ["doctor", "admin", "admin_staff"]
     results = []
     
     for role in roles:

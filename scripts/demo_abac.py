@@ -76,8 +76,6 @@ def main():
     line()
     run(policy, ex, Subject("admin_staff"), "avg_vien_phi", {},
         "Nhân viên hành chính xem AVG viện phí (nhưng KHÔNG xem chẩn đoán)")
-    run(policy, ex, Subject("researcher"), "avg_vien_phi", {},
-        "Nhà nghiên cứu xem AVG — chỉ số tổng hợp, dữ liệu cá nhân bị che")
     run(policy, ex, Subject("doctor", "Noi"), "sum_vien_phi", {},
         "Bác sĩ chạy SUM — bị tầng RBAC chặn (ngoài quyền)")
 

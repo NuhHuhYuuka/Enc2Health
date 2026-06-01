@@ -72,27 +72,17 @@ def test_doctor_cannot_sum():
     d = r.check("doctor", "sum_vien_phi")
     assert d.allowed is False
 
-def test_researcher_avg_masked():
-    r = RBACMiddleware()
-    d = r.check("researcher", "avg_vien_phi")
-    assert d.allowed is True
-    assert "vien_phi" in d.masked_fields
-    assert "ma_benh" in d.masked_fields
-
 def test_pii_roles_allowed_with_masking():
     r = RBACMiddleware()
     assert r.check("doctor", "get_patient").allowed is True
     assert r.check("admin_staff", "get_patient").allowed is True
-    assert r.check("researcher", "get_patient").allowed is True
     assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "admin_staff")["cmnd"] == "[MASKED]"
-    assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "researcher")["ho_ten"] == "[MASKED]"
 
 def test_keyword_search_roles_allowed():
     r = RBACMiddleware()
     assert r.check("admin", "keyword_search").allowed is True
     assert r.check("doctor", "keyword_search").allowed is True
     assert r.check("admin_staff", "keyword_search").allowed is True
-    assert r.check("researcher", "keyword_search").allowed is True
 
 def test_invalid_role_denied():
     r = RBACMiddleware()
