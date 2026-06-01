@@ -45,8 +45,12 @@
   .b-fall{background:#fdf0db;color:#b45309;border:1px solid #fcd9a0}
   .b-403{background:#fde8e8;color:#b91c1c;border:1px solid #f7b4b4}
   .result-num{font-size:38px;font-weight:800;margin:10px 0 2px}
-  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
-  .kv span:first-child{color:var(--mut)} .muted{color:var(--mut);font-size:13px}
+  .kv{display:grid;grid-template-columns:180px minmax(0,1fr);gap:12px;align-items:start;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .kv span:first-child{color:var(--mut)}
+  .kv b{min-width:0;text-align:right;overflow-wrap:anywhere;word-break:break-word}
+  .kv.stack{grid-template-columns:1fr;gap:4px}
+  .kv.stack b{text-align:left}
+  .muted{color:var(--mut);font-size:13px}
   .hide{display:none}
   .sec-panel{background:#0f1f33;color:#cfe0f0;border-color:#1c3a5e}
   .sec-panel h2.sec{color:#7fa6cf}
@@ -286,7 +290,7 @@ async function searchPatient() {
     <div class="kv"><span>Họ và tên</span><b>${fmt(pii.ho_ten)}</b></div>
     <div class="kv"><span>Số CCCD (CMND)</span><b>${fmt(pii.cmnd)}</b></div>
     <div class="kv"><span>Ngày sinh</span><b>${fmt(pii.ngay_sinh)}</b></div>
-    <div class="kv"><span>Địa chỉ</span><b>${fmt(pii.dia_chi)}</b></div>
+    <div class="kv stack"><span>Địa chỉ</span><b>${fmt(pii.dia_chi)}</b></div>
     <div class="kv"><span>Khoa điều trị</span><b>${DEPT_LABELS[p.dept] || p.dept || '—'}</b></div>
     <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${DEPT_LABELS[p.dept] || p.dept})</b></div>
     <div class="kv"><span>Độ trễ truy vấn</span><b>${data.total_latency_ms} ms</b></div>

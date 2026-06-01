@@ -43,6 +43,22 @@ ICD10_CODES = {
 }
 
 DEPARTMENTS = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
+STREET_NAMES = [
+    "Nguyễn Trãi", "Lê Lợi", "Trần Hưng Đạo", "Hai Bà Trưng",
+    "Điện Biên Phủ", "Nguyễn Huệ", "Phan Đình Phùng", "Lý Thường Kiệt",
+]
+WARD_NAMES = [
+    "Phường Bến Nghé", "Phường Tân Định", "Phường Linh Trung",
+    "Phường Hòa Cường", "Xã Bình Minh", "Xã Tân Phú",
+]
+DISTRICT_NAMES = [
+    "Quận 1", "Quận 3", "Quận Bình Thạnh", "Quận Hải Châu",
+    "Huyện Nhà Bè", "Thị xã Sơn Tây",
+]
+CITY_NAMES = [
+    "TP. Hồ Chí Minh", "TP. Hà Nội", "TP. Đà Nẵng",
+    "TP. Cần Thơ", "TP. Hải Phòng",
+]
 
 def random_date(start_year=2020, end_year=2024) -> date:
     start = date(start_year, 1, 1)
@@ -54,6 +70,16 @@ def birth_date_from_age(admission_date: date, age: int) -> date:
     """Sinh ngày sinh xấp xỉ từ tuổi và ngày nhập viện."""
     days = age * 365 + random.randint(0, 364)
     return admission_date - timedelta(days=days)
+
+
+def generate_vietnamese_address() -> str:
+    """Tạo địa chỉ demo có cấu trúc ổn định, không phụ thuộc format thô của Faker."""
+    house_number = random.randint(1, 999)
+    street = random.choice(STREET_NAMES)
+    ward = random.choice(WARD_NAMES)
+    district = random.choice(DISTRICT_NAMES)
+    city = random.choice(CITY_NAMES)
+    return f"Số {house_number} đường {street}, {ward}, {district}, {city}"
 
 
 def _load_required_cipher(cipher_cls, key_path: Path):
@@ -162,7 +188,7 @@ def main():
 
         ho_ten = fake.name()
         cmnd = fake.numerify("0##########")
-        dia_chi = fake.address()
+        dia_chi = generate_vietnamese_address()
         pii_payload = {
             "ho_ten": ho_ten,
             "cmnd": cmnd,
