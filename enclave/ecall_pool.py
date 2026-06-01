@@ -307,6 +307,44 @@ def _normalize_ma_benh(value: str) -> str:
     return ICD10_ALIASES.get(value, value)
 
 
+def _query_mock_aggregate(query_type: str, filters: Dict[str, object]) -> Dict[str, object]:
+    """Run aggregate queries against the in-process simulation dataset."""
+    records = MOCK_PATIENT_DATA
+
+    if "ma_benh" in filters:
+        ma_benh = _normalize_ma_benh(str(filters["ma_benh"]))
+        records = [record for record in records if record["ma_benh"] == ma_benh]
+
+    dept = filters.get("khoa_phong", filters.get("khoa"))
+    if dept is not None:
+        records = [record for record in records if record["khoa"] == str(dept)]
+
+    if "tuoi_min_enc" in filters:
+        min_age = int(filters["tuoi_min_enc"])
+        records = [record for record in records if int(record["tuoi"]) >= min_age]
+
+    if "tuoi_max_enc" in filters:
+        max_age = int(filters["tuoi_max_enc"])
+        records = [record for record in records if int(record["tuoi"]) <= max_age]
+
+    n_records = len(records)
+    if query_type == "count":
+        result = float(n_records)
+    elif query_type == "avg_vien_phi":
+        result = sum(float(record["vien_phi"]) for record in records) / n_records if records else 0.0
+    elif query_type == "sum_vien_phi":
+        result = sum(float(record["vien_phi"]) for record in records)
+    else:
+        raise ValueError(f"Unknown query type: {query_type}")
+
+    return {
+        "result": result,
+        "n_records": n_records,
+        "latency_ms": 0.0,
+        "query_type": query_type,
+    }
+
+
 def _make_attestation_payload() -> dict:
     payload = {
         "mrenclave": os.environ.get("T8_EXPECTED_MRENCLAVE", "simulated-mrenclave"),
@@ -493,7 +531,7 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
         else:
             if STRICT_MODE:
                 raise RuntimeError("Strict mode forbids fallback aggregate without Mongo/ciphertexts")
-            result_data = enclave_service.query_patient_aggregate(req.query_type, normalized_filters)
+            result_data = _query_mock_aggregate(req.query_type, normalized_filters)
     latency_ms = (time.perf_counter() - t_start) * 1000
 
     return {

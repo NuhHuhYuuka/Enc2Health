@@ -36,7 +36,8 @@ services:
       MONGO_COLLECTION: patient_records
       EHR_RECORD_COUNT: ${EHR_RECORD_COUNT:-10000}
       EHR_BATCH_SIZE: ${EHR_BATCH_SIZE:-500}
-      EHR_FORCE_RECREATE: ${EHR_FORCE_RECREATE:-0}
+      EHR_RANDOM_SEED: ${EHR_RANDOM_SEED:-42}
+      EHR_FORCE_RECREATE: ${EHR_FORCE_RECREATE:-1}
     command: ["python", "crypto/data/generate_ehr.py"]
     volumes:
       - keys_data:/app/crypto/data/keys
@@ -62,6 +63,9 @@ services:
       MONGO_COLLECTION: patient_records
       T8_POOL_HOST: 0.0.0.0
       T8_POOL_PORT: 9091
+      T8_POOL_DATA_MODE: ${T8_POOL_DATA_MODE:-mongo}
+      T8_STRICT_MODE: ${T8_STRICT_MODE:-1}
+      T8_ALLOW_LOCAL_KEY_FALLBACK: ${T8_ALLOW_LOCAL_KEY_FALLBACK:-1}
       T8_POOL_RECORDS: ${T8_POOL_RECORDS:-10000}
       T8_POOL_PAYLOAD_BYTES: ${T8_POOL_PAYLOAD_BYTES:-256}
       T8_SSL_CERT: /certs/server.crt
@@ -100,6 +104,7 @@ services:
       MONGO_COLLECTION: patient_records
       ECALL_POOL_URL: https://ecall-task-pool:9091
       ROUTER_TEE_PUSH_CIPHERTEXT: ${ROUTER_TEE_PUSH_CIPHERTEXT:-1}
+      SOFTWARE_STRICT_MODE: ${SOFTWARE_STRICT_MODE:-1}
       ENC2HEALTH_DEV_UI: ${ENC2HEALTH_DEV_UI:-1}
       ROUTER_CLIENT_CERT: /certs/client.crt
       ROUTER_CLIENT_KEY: /certs/client.key

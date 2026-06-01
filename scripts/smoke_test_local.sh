@@ -5,6 +5,7 @@ AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-32-bytes-long-1234567890}
 export AUTH_JWT_SECRET
 EHR_RECORD_COUNT=${EHR_RECORD_COUNT:-10000}
 EHR_BATCH_SIZE=${EHR_BATCH_SIZE:-500}
+EHR_RANDOM_SEED=${EHR_RANDOM_SEED:-42}
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CERT_DIR="$REPO_ROOT/certs"
@@ -169,7 +170,7 @@ mkdir -p "$KEY_DIR"
 
 if [[ "$SKIP_SEED" -eq 0 ]]; then
   echo "[smoke-local] seeding ${EHR_RECORD_COUNT} records into MongoDB..."
-  MONGO_URI=${MONGO_URI} MONGO_DB=enc2health MONGO_COLLECTION=patient_records EHR_RECORD_COUNT=${EHR_RECORD_COUNT} EHR_BATCH_SIZE=${EHR_BATCH_SIZE} EHR_FORCE_RECREATE=1 \
+  MONGO_URI=${MONGO_URI} MONGO_DB=enc2health MONGO_COLLECTION=patient_records EHR_RECORD_COUNT=${EHR_RECORD_COUNT} EHR_BATCH_SIZE=${EHR_BATCH_SIZE} EHR_RANDOM_SEED=${EHR_RANDOM_SEED} EHR_FORCE_RECREATE=1 \
     "$VENV_PY" crypto/data/generate_ehr.py
 else
   echo "[smoke-local] skipping seeding. ECALL pool will use mock dataset."
@@ -199,6 +200,7 @@ fi
 if [[ "$ROUTER_HEALTH_OK" -ne 1 ]]; then
   echo "[smoke-local] starting router (uvicorn)"
   ECALL_POOL_URL="$ECALL_POOL_URL" ROUTER_CLIENT_CERT="$ROUTER_CLIENT_CERT" ROUTER_CLIENT_KEY="$ROUTER_CLIENT_KEY" T8_SSL_CA="$T8_SSL_CA" \
+    ENC2HEALTH_DEV_UI="${ENC2HEALTH_DEV_UI:-1}" \
     "$VENV_PY" -m uvicorn router.main:app --host 127.0.0.1 --port 8000 &
   ROUTER_PID=$!
 fi

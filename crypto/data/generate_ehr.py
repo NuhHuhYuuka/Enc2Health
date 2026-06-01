@@ -15,9 +15,6 @@ from crypto.ore  import ORECipher
 from crypto.gcm  import AESGCMCipher
 from pymongo import MongoClient
 
-fake = Faker("vi_VN")
-random.seed(42)
-
 # ── Cấu hình ──────────────────────────────────────────────────────────────
 MONGO_URI    = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME      = os.getenv("MONGO_DB", "enc2health")
@@ -25,6 +22,12 @@ COLLECTION   = os.getenv("MONGO_COLLECTION", "patient_records")
 RECORD_COUNT = int(os.getenv("EHR_RECORD_COUNT", "10000"))
 BATCH_SIZE   = int(os.getenv("EHR_BATCH_SIZE", "500"))
 FORCE_RECREATE = os.getenv("EHR_FORCE_RECREATE", "0") == "1"
+DATASET_SEED = int(os.getenv("EHR_RANDOM_SEED", "42"))
+
+random.seed(DATASET_SEED)
+Faker.seed(DATASET_SEED)
+fake = Faker("vi_VN")
+fake.seed_instance(DATASET_SEED)
 
 # ICD-10 mã bệnh phổ biến
 ICD10_CODES = {
@@ -126,6 +129,7 @@ def main():
     col.drop()  # Reset nếu chạy lại
 
     print(f"[4/5] Sinh và insert {RECORD_COUNT:,} hồ sơ...")
+    print(f"  Dataset seed: {DATASET_SEED}")
     batch_size = BATCH_SIZE
     batch = []
 
@@ -156,7 +160,9 @@ def main():
 
         doc = {
             # Plaintext fields
-            "patient_id": str(uuid.uuid4()),
+            "patient_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"enc2health:{DATASET_SEED}:{i}")),
+            "record_index": i,
+            "dataset_seed": DATASET_SEED,
             "khoa_phong_plaintext": dept,  # Chỉ để debug, xóa trong production
 
             # PII – Asymmetric ECC
