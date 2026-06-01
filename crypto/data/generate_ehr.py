@@ -119,6 +119,7 @@ def main():
     # DTE: mỗi field 1 key riêng
     dte_ma_benh   = _load_required_cipher(DTECipher, key_dir / "dte_ma_benh.key")
     dte_khoa      = _load_required_cipher(DTECipher, key_dir / "dte_khoa.key")
+    dte_cmnd      = _load_required_cipher(DTECipher, key_dir / "dte_cmnd.key")
     # ORE: 1 key cho tất cả integer/date fields
     ore = _load_required_cipher(ORECipher, key_dir / "ore.key")
     # AES-GCM: DEK cho lab results & billing
@@ -186,6 +187,7 @@ def main():
             # Clinical – DTE AES-SIV
             "ma_benh_enc":    dte_ma_benh.encrypt(ma_benh, b"field:ma_benh"),
             "khoa_phong_enc": dte_khoa.encrypt(dept, b"field:khoa_phong"),
+            "cmnd_dte":       dte_cmnd.encrypt(cmnd, b"field:cmnd"),
 
             # Range – OPE
             "tuoi_enc":          ore.encrypt_age(tuoi),
@@ -216,6 +218,7 @@ def main():
     # Index trên DTE fields (equality search)
     col.create_index("ma_benh_enc")
     col.create_index("khoa_phong_enc")
+    col.create_index("cmnd_dte")
     # Index trên ORE fields (range query)
     col.create_index("tuoi_enc")
     col.create_index("ngay_sinh_enc")

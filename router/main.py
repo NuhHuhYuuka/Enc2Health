@@ -81,10 +81,14 @@ async def handle_query(req: QueryRequest, request: Request):
     ciphertext_count = None
     if is_pii_lookup:
         patient_id = req.patient_id or eff_filters.get("patient_id")
-        if not patient_id:
-            raise HTTPException(status_code=400, detail="patient_id is required for get_patient")
+        cmnd = eff_filters.get("cmnd")
+        if not patient_id and not cmnd:
+            raise HTTPException(status_code=400, detail="patient_id or cmnd is required for get_patient")
         try:
-            pii_ciphertext = software_executor.fetch_patient_pii_ciphertext(str(patient_id))
+            if patient_id:
+                pii_ciphertext = software_executor.fetch_patient_pii_ciphertext(str(patient_id))
+            else:
+                pii_ciphertext = software_executor.fetch_patient_pii_ciphertext_by_cmnd(str(cmnd))
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:

@@ -50,6 +50,7 @@ class SoftwareExecutor:
         self.collection = self.client[DEFAULT_DB_NAME][DEFAULT_COLLECTION]
         self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key")
         self._dte_khoa = self._load_dte_cipher("dte_khoa.key")
+        self._dte_cmnd = self._load_dte_cipher("dte_cmnd.key")
         self._gcm = self._load_gcm_cipher("gcm_dek.key")
         self._ore = self._load_ore_cipher("ore.key")
         self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
@@ -225,6 +226,36 @@ class SoftwareExecutor:
 
         return {
             "patient_id": record.get("patient_id", patient_id),
+            "pii_enc": record["pii_enc"],
+            "dept": dept,
+        }
+
+    def fetch_patient_pii_ciphertext_by_cmnd(self, cmnd: str) -> dict[str, Any]:
+        """Lấy `pii_enc` và khoa của một bệnh nhân từ MongoDB bằng cmnd (CCCD)."""
+        if not self._mongo_available:
+            raise RuntimeError("MongoDB unavailable; cannot fetch patient PII by CCCD")
+        if self._dte_cmnd is None:
+            raise RuntimeError("dte_cmnd key not available")
+
+        cmnd_dte_ciphertext = self._dte_cmnd.encrypt(cmnd, b"field:cmnd")
+
+        projection = {"pii_enc": 1, "dept": 1, "khoa_phong_plaintext": 1, "patient_id": 1}
+        record = self.collection.find_one({"cmnd_dte": cmnd_dte_ciphertext}, projection)
+
+        if record is None:
+            raise LookupError(f"Không tìm thấy bệnh nhân có CCCD: {cmnd}")
+        if not record.get("pii_enc"):
+            raise RuntimeError(
+                "Patient record has no pii_enc; reseed with "
+                "EHR_FORCE_RECREATE=1 python3 crypto/data/generate_ehr.py"
+            )
+
+        dept = record.get("dept") or record.get("khoa_phong_plaintext")
+        if not dept:
+            raise RuntimeError(f"Patient record missing department for CCCD: {cmnd}")
+
+        return {
+            "patient_id": record.get("patient_id"),
             "pii_enc": record["pii_enc"],
             "dept": dept,
         }

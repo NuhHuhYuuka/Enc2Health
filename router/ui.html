@@ -69,6 +69,7 @@
   <div class="nav">
     <a class="on" onclick="show('dash',this)">📊 Tổng quan</a>
     <a onclick="show('analytics',this)">🩺 Phân tích lâm sàng</a>
+    <a onclick="show('lookup',this)">🔍 Tra cứu CCCD</a>
     <a onclick="show('sec',this)">🔒 Lớp bảo mật</a>
     <div style="margin-top:18px"></div>
     <div class="card" style="padding:14px">
@@ -132,6 +133,36 @@
       </div>
     </div>
 
+    <!-- PATIENT LOOKUP -->
+    <div id="view-lookup" class="hide">
+      <h2 class="sec">Tra cứu thông tin bệnh nhân bằng CCCD</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <label>Nhập số CCCD cần tra cứu</label>
+          <input id="searchCmnd" value="" placeholder="Ví dụ: 03321819600">
+          <button onclick="searchPatient()">🔍 Tra cứu bảo mật (TEE Decrypt)</button>
+          
+          <div class="muted" style="margin-top:14px; line-height: 1.6;">
+            <b>Bảo vệ quyền riêng tư:</b> Dữ liệu CCCD được lưu trữ dưới dạng bản mã DTE đối xứng tất định trên Cloud, cho phép tìm kiếm chính xác mà không làm lộ số CCCD gốc. Thông tin chi tiết (PII) được mã hóa bằng khóa công khai ECC của Khoa và chỉ có thể giải mã bên trong Enclave bảo mật của TEE (SGX).
+          </div>
+          
+          <div class="muted" style="margin-top:12px;">
+            <b>CCCD mẫu có trong cơ sở dữ liệu (Seed 42):</b>
+            <div id="sampleCmnds" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+              <!-- Sample buttons will be populated by JS -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h2 class="sec">Kết quả chi tiết (Decrypted by TEE Enclave)</h2>
+          <div id="lookupResultBox" class="muted">
+            Nhập CCCD của bệnh nhân ở khung bên trái và nhấn nút "Tra cứu".
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SECURITY -->
     <div id="view-sec" class="hide">
       <h2 class="sec">Lớp bảo mật & vận hành — "tấm rèm phía sau"</h2>
@@ -176,7 +207,7 @@ const DEPT_LABELS={
   Nhi:'Nhi',
 };
 
-function show(v,el){ for(const id of ['dash','analytics','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
+function show(v,el){ for(const id of ['dash','analytics','lookup','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
   if(el){document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on')); el.classList.add('on');} }
 function syncDept(){ document.getElementById('deptWrap').style.display = document.getElementById('role').value==='doctor'?'block':'none'; }
 function setDiseaseCode(code){ document.getElementById('mabenh').value=code; }
@@ -220,6 +251,68 @@ async function drawAges(){
   document.getElementById('ageChart').innerHTML=rows||'<span class="muted">Không có dữ liệu (role bị giới hạn?)</span>';
 }
 
+async function searchPatient() {
+  if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
+  const cmndVal = document.getElementById('searchCmnd').value.trim();
+  if(!cmndVal){alert('Vui lòng nhập số CCCD.');return;}
+  
+  const box = document.getElementById('lookupResultBox');
+  box.innerHTML = '<span class="muted">Đang truy vấn MongoDB bằng DTE và giải mã bằng TEE...</span>';
+  
+  const {status, data} = await call('lookup_patient', {cmnd: cmndVal});
+  if(status === 403) {
+    box.innerHTML = '<span class="badge b-403">Không có quyền</span><p class="muted">Bị chặn bởi cơ chế ABAC (khoa khác) hoặc RBAC.</p>';
+    updateSec(null);
+    return;
+  }
+  if(status === 404) {
+    box.innerHTML = '<span class="badge b-403">Không tìm thấy</span><p class="muted">Không tìm thấy bệnh nhân nào có số CCCD này trong cơ sở dữ liệu.</p>';
+    updateSec(null);
+    return;
+  }
+  if(!data) {
+    box.innerHTML = `<span class="badge b-403">Lỗi hệ thống</span><p class="muted">HTTP Status ${status}</p>`;
+    updateSec(null);
+    return;
+  }
+  
+  const p = data.result || {};
+  const pii = p.pii || {};
+  const badge = data.mode === 'tee' ? '<span class="badge b-tee">🔒 TEE · Enclave Decrypted</span>' : '<span class="badge b-soft">Software Mode</span>';
+  
+  box.innerHTML = `
+    <div style="margin-bottom: 12px;">${badge}</div>
+    <div class="kv"><span>Mã định danh (Patient ID)</span><b>${p.patient_id || '—'}</b></div>
+    <div class="kv"><span>Họ và tên</span><b>${fmt(pii.ho_ten)}</b></div>
+    <div class="kv"><span>Số CCCD (CMND)</span><b>${fmt(pii.cmnd)}</b></div>
+    <div class="kv"><span>Ngày sinh</span><b>${fmt(pii.ngay_sinh)}</b></div>
+    <div class="kv"><span>Địa chỉ</span><b>${fmt(pii.dia_chi)}</b></div>
+    <div class="kv"><span>Khoa điều trị</span><b>${DEPT_LABELS[p.dept] || p.dept || '—'}</b></div>
+    <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${DEPT_LABELS[p.dept] || p.dept})</b></div>
+    <div class="kv"><span>Độ trễ truy vấn</span><b>${data.total_latency_ms} ms</b></div>
+  `;
+  updateSec(data);
+}
+
+function renderSampleCmnds() {
+  const samples = [
+    {name: 'An Vũ (Khoa Nhi)', cmnd: '03321819600'},
+    {name: 'Thành Vũ (Khoa Nội)', cmnd: '02351161559'},
+    {name: 'An Phạm (Khoa Tim mạch)', cmnd: '04131647525'},
+    {name: 'Ánh Nguyễn (Khoa Cấp cứu)', cmnd: '03056413953'},
+    {name: 'An Vũ (Khoa Thần kinh)', cmnd: '08281489325'},
+    {name: 'Nhật Bùi (Khoa Ngoại)', cmnd: '09367632016'}
+  ];
+  document.getElementById('sampleCmnds').innerHTML = samples.map(s => 
+    `<button type="button" class="ghost" style="width:auto;margin:2px;padding:6px 10px;font-size:12px;" onclick="setSearchCmnd('${s.cmnd}')" title="${s.name}">${s.name}: ${s.cmnd}</button>`
+  ).join('');
+}
+
+function setSearchCmnd(cmnd) {
+  document.getElementById('searchCmnd').value = cmnd;
+  searchPatient();
+}
+
 async function runQuery(){
   if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
   const qtype=document.getElementById('qtype').value, filters={};
@@ -257,7 +350,7 @@ async function simulate(v){
   document.getElementById('adaptiveBox').innerHTML=`Trạng thái: ${badge} &nbsp;<span class="muted">ngưỡng fallback ${d.epc_threshold*100}% · phục hồi ${d.restore_threshold*100}%</span>`;
 }
 
-syncDept(); renderDiseaseCodes(); login(); simulate(0);
+syncDept(); renderDiseaseCodes(); renderSampleCmnds(); login(); simulate(0);
 </script>
 </body>
 </html>

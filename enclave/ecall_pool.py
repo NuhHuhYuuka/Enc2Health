@@ -106,6 +106,7 @@ _executor = ThreadPoolExecutor(max_workers=POOL_WORKERS)
 _mongo_client = None
 _mongo_collection = None
 _dte_cipher: DTECipher | None = None
+_dte_khoa_cipher: DTECipher | None = None
 _ore_cipher: ORECipher | None = None
 _keys_loaded = False
 _dek_source = "unknown"
@@ -117,11 +118,13 @@ def _load_runtime_keys() -> None:
     runtime_keys = {
         "gcm_dek": "gcm_dek",
         "dte_ma_benh": "dte_ma_benh",
+        "dte_khoa": "dte_khoa",
         "ore_key": "ore_key",
     }
     local_key_files = {
         "gcm_dek": REPO_ROOT / "crypto" / "data" / "keys" / "gcm_dek.key",
         "dte_ma_benh": REPO_ROOT / "crypto" / "data" / "keys" / "dte_ma_benh.key",
+        "dte_khoa": REPO_ROOT / "crypto" / "data" / "keys" / "dte_khoa.key",
         "ore_key": REPO_ROOT / "crypto" / "data" / "keys" / "ore.key",
     }
 
@@ -168,9 +171,11 @@ def _load_runtime_keys() -> None:
 
 
 def _refresh_crypto_helpers() -> None:
-    global _dte_cipher, _ore_cipher
+    global _dte_cipher, _dte_khoa_cipher, _ore_cipher
     if "dte_ma_benh" in _keys:
         _dte_cipher = DTECipher(_keys["dte_ma_benh"])
+    if "dte_khoa" in _keys:
+        _dte_khoa_cipher = DTECipher(_keys["dte_khoa"])
     if "ore_key" in _keys:
         _ore_cipher = ORECipher(_keys["ore_key"])
 
@@ -210,8 +215,9 @@ def _build_mongo_filter(filters: Dict[str, object]) -> Dict[str, object]:
     if "tuoi_max_enc" in filters and _ore_cipher is not None:
         query.setdefault("tuoi_enc", {})["$lte"] = _ore_cipher.encrypt_age(int(filters["tuoi_max_enc"]))
 
-    if "khoa" in filters and _dte_cipher is not None:
-        query["khoa_phong_enc"] = _dte_cipher.encrypt(str(filters["khoa"]), b"field:khoa_phong")
+    dept = filters.get("khoa_phong") or filters.get("khoa")
+    if dept is not None and _dte_khoa_cipher is not None:
+        query["khoa_phong_enc"] = _dte_khoa_cipher.encrypt(str(dept), b"field:khoa_phong")
 
     return query
 
@@ -455,7 +461,7 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
     Execute a medical aggregation query.
     Runs in thread pool to allow concurrent access.
     """
-    allowed_roles = {"doctor", "admin", "researcher"}
+    allowed_roles = {"doctor", "admin", "researcher", "admin_staff"}
     if req.role not in allowed_roles:
         raise ValueError(f"Invalid role: {req.role}")
 

@@ -137,6 +137,8 @@ def test_fetch_patient_pii_requires_mongo():
     ex._mongo_available = False
     with pytest.raises(RuntimeError):
         ex.fetch_patient_pii_ciphertext("pid-1")
+    with pytest.raises(RuntimeError):
+        ex.fetch_patient_pii_ciphertext_by_cmnd("01234567890")
 
 # ── T6: Adaptive state machine (tất định, không cần pool) ────────
 

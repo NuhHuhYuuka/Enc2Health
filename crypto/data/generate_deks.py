@@ -27,6 +27,7 @@ def main():
     specs = [
         (DTECipher, "dte_ma_benh.key"),
         (DTECipher, "dte_khoa.key"),
+        (DTECipher, "dte_cmnd.key"),
         (ORECipher, "ore.key"),
         (AESGCMCipher, "gcm_dek.key"),
     ]
