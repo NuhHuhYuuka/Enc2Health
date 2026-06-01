@@ -75,7 +75,7 @@ def main():
     print("\n  [3] PHÂN QUYỀN THEO VAI TRÒ + THUỘC TÍNH")
     line()
     run(policy, ex, Subject("admin_staff"), "avg_vien_phi", {},
-        "Nhân viên hành chính xem AVG viện phí (nhưng KHÔNG xem chẩn đoán)")
+        "Nhân viên hành chính xem AVG viện phí (được xem chẩn đoán)")
     run(policy, ex, Subject("doctor", "Noi"), "sum_vien_phi", {},
         "Bác sĩ chạy SUM — bị tầng RBAC chặn (ngoài quyền)")
 

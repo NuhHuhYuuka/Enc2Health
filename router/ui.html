@@ -309,6 +309,8 @@ function renderPatientDetails(data, targetId){
     <div class="kv"><span>Số CCCD (CMND)</span><b>${escapeHtml(fmt(pii.cmnd))}</b></div>
     <div class="kv"><span>Ngày sinh</span><b>${escapeHtml(fmt(pii.ngay_sinh))}</b></div>
     <div class="kv stack"><span>Địa chỉ</span><b>${escapeHtml(fmt(pii.dia_chi))}</b></div>
+    <div class="kv stack"><span>Tóm tắt bệnh án</span><b>${escapeHtml(fmt(pii.tom_tat_benh_an || '—'))}</b></div>
+    <div class="kv stack"><span>Phác đồ điều trị</span><b>${escapeHtml(fmt(pii.phac_do_dieu_tri || '—'))}</b></div>
     <div class="kv"><span>Khoa điều trị</span><b>${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')}</b></div>
     <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')})</b></div>
     <div class="kv"><span>Độ trễ truy vấn</span><b>${escapeHtml(data.total_latency_ms)} ms</b></div>

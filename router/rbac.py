@@ -19,12 +19,12 @@ ROLE_PERMISSIONS = {
         "can_see_ma_benh": True,
         "pii_access": "full",
     },
-    # Nhân viên hành chính: chỉ xử lý viện phí, KHÔNG xem chẩn đoán y khoa (kịch bản §3).
+    # Nhân viên hành chính: xem được mọi thông tin cũ, trừ 2 thông tin mới
     "admin_staff": {
         "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count", "get_patient", "lookup_patient", "keyword_search"},
         "can_see_vien_phi": True,
-        "can_see_ma_benh": False,    # ẩn mã bệnh / chẩn đoán
-        "pii_access": "partial",
+        "can_see_ma_benh": True,    # cho phép xem mã bệnh
+        "pii_access": "full",       # cho phép xem PII đầy đủ
     },
 }
 
@@ -82,14 +82,31 @@ class RBACMiddleware:
 
     def mask_pii(self, pii: dict, role: str) -> dict:
         """Mask PII plaintext after enclave decryption, according to role."""
+        res = {}
         access = ROLE_PERMISSIONS.get(role, {}).get("pii_access", "masked")
         if access == "full":
-            return dict(pii)
-        if access == "partial":
-            return {
+            res.update({
+                "ho_ten": pii.get("ho_ten"),
+                "cmnd": pii.get("cmnd"),
+                "ngay_sinh": pii.get("ngay_sinh"),
+                "dia_chi": pii.get("dia_chi"),
+            })
+        elif access == "partial":
+            res.update({
                 "ho_ten": pii.get("ho_ten", "[MASKED]"),
                 "cmnd": "[MASKED]",
                 "ngay_sinh": pii.get("ngay_sinh", "[MASKED]"),
                 "dia_chi": "[MASKED]",
-            }
-        return {key: "[MASKED]" for key in ("ho_ten", "cmnd", "ngay_sinh", "dia_chi")}
+            })
+        else:
+            res.update({key: "[MASKED]" for key in ("ho_ten", "cmnd", "ngay_sinh", "dia_chi")})
+
+        # 2 thông tin mới (tóm tắt bệnh án & phác đồ điều trị) chỉ hiển thị với admin và doctor
+        if role in {"admin", "doctor"}:
+            res["tom_tat_benh_an"] = pii.get("tom_tat_benh_an")
+            res["phac_do_dieu_tri"] = pii.get("phac_do_dieu_tri")
+        else:
+            res["tom_tat_benh_an"] = "[MASKED]"
+            res["phac_do_dieu_tri"] = "[MASKED]"
+            
+        return res

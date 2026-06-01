@@ -87,6 +87,36 @@ CLINICAL_NOTE_TEMPLATES = [
     "Theo dõi nguy cơ biến chứng liên quan {diagnosis} tại khoa {dept}.",
 ]
 
+CLINICAL_SUMMARIES = {
+    "P01": "Bệnh nhi ho nhiều, sốt cao, khò khè, phổi có rít ẩm, X-quang phổi có tổn thương thâm nhiễm.",
+    "P02": "Bệnh nhi sốt cao liên tục ngày thứ 4, xuất hiện xuất huyết dưới da, tiểu cầu giảm mạnh.",
+    "C01": "Bệnh nhân thường xuyên đau đầu, chóng mặt, đo huyết áp ghi nhận trị số 160/90 mmHg kéo dài.",
+    "C02": "Bệnh nhân đau tức ngực trái khi gắng sức, điện tâm đồ có dấu hiệu thiếu máu cơ tim vùng hoành.",
+    "I01": "Bệnh nhân có triệu chứng ăn nhiều, uống nhiều, tiểu nhiều, sụt cân, xét nghiệm glucose máu đói 8.5 mmol/L.",
+    "I02": "Bệnh nhân mệt mỏi, phù hai chi dưới, thiếu máu nhẹ, ure và creatinine máu tăng cao (creatinine 350 umol/L).",
+    "N01": "Bệnh nhân mất ngủ kéo dài, buồn bã vô cớ, suy giảm năng lượng, có suy nghĩ tiêu cực.",
+    "N02": "Bệnh nhân đau dọc đường đi của dây thần kinh hông to một bên, tăng lên khi ho hoặc cúi người.",
+    "S01": "Bệnh nhân đau âm ỉ hố chậu phải tăng dần, có phản ứng thành bụng, sốt nhẹ 38 độ C.",
+    "S02": "Bệnh nhân đau quặn hạ sườn phải lan lên vai phải sau bữa ăn nhiều dầu mỡ, siêu âm có sỏi bùn túi mật.",
+    "E01": "Bệnh nhân nhập viện trong tình trạng sốc chấn thương, đa vết thương phần mềm, nghi gãy xương đùi.",
+    "E02": "Bệnh nhân nôn mửa, đau bụng quặn thắt, đi ngoài nhiều lần sau khi ăn hải sản không rõ nguồn gốc.",
+}
+
+TREATMENT_PROTOCOLS = {
+    "P01": "Kháng sinh Amoxicillin phối hợp, hạ sốt bằng Paracetamol, khí dung giãn phế quản, bổ sung nước điện giải.",
+    "P02": "Bù dịch tĩnh mạch theo phác đồ chống sốc Dengue, theo dõi sát mạch, huyết áp và số lượng tiểu cầu hàng giờ.",
+    "C01": "Chỉ định dùng thuốc hạ áp Amlodipine 5mg uống sáng, hạn chế ăn mặn, tập thể dục nhẹ nhàng.",
+    "C02": "Dùng Aspirin 81mg chống ngưng tập tiểu cầu, Atorvastatin 20mg kiểm soát mỡ máu, giảm gắng sức.",
+    "I01": "Điều trị bằng Metformin 850mg uống sau ăn, tư vấn chế độ ăn giảm tinh bột, theo dõi đường huyết đói hàng tuần.",
+    "I02": "Chế độ ăn giảm đạm, kiểm soát huyết áp bằng ARB, bổ sung Erythropoietin kích hồng cầu, chuẩn bị lọc máu chu kỳ.",
+    "N01": "Sử dụng thuốc chống trầm cảm dòng SSRI (Sertraline 50mg), kết hợp trị liệu tâm lý nhận thức hành vi.",
+    "N02": "Giảm đau bằng NSAID (Meloxicam 15mg), uống bổ sung vitamin nhóm B, hạn chế mang vác vật nặng.",
+    "S01": "Chỉ định mổ nội soi cắt ruột thừa cấp cứu, kháng sinh dự phòng cefuroxime + metronidazole.",
+    "S02": "Chỉ định phẫu thuật nội soi cắt túi mật chủ động, tư vấn chế độ ăn ít chất béo sau mổ.",
+    "E01": "Cố định xương gãy, truyền dịch chống sốc, chụp CT toàn thân xác định tổn thương nội tạng, hội chẩn mổ khẩn.",
+    "E02": "Truyền dịch bù nước điện giải Ringer Lactate, uống than hoạt tính hấp phụ độc tố, dùng kháng sinh đường ruột nếu nhiễm khuẩn.",
+}
+
 def random_date(start_year=2020, end_year=2024) -> date:
     start = date(start_year, 1, 1)
     end   = date(end_year, 12, 31)
@@ -216,6 +246,8 @@ def main():
             diagnosis=chan_doan,
             dept=dept.replace("_", " "),
         )
+        tom_tat_benh_an = CLINICAL_SUMMARIES[ma_benh]
+        phac_do_dieu_tri = TREATMENT_PROTOCOLS[ma_benh]
         ket_qua_xn = {
             "glucose": round(random.uniform(3.5, 15.0), 1),   # mmol/L
             "hba1c":   round(random.uniform(4.0, 12.0), 1),   # %
@@ -230,6 +262,8 @@ def main():
             "cmnd": cmnd,
             "ngay_sinh": ngay_sinh.isoformat(),
             "dia_chi": dia_chi,
+            "tom_tat_benh_an": tom_tat_benh_an,
+            "phac_do_dieu_tri": phac_do_dieu_tri,
         }
 
         patient_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"enc2health:{DATASET_SEED}:{i}"))
@@ -240,6 +274,8 @@ def main():
                 chan_doan,
                 clinical_note,
                 dept.replace("_", " "),
+                tom_tat_benh_an,
+                phac_do_dieu_tri,
             ]
         )
         for keyword in tokenize_text(keyword_source):

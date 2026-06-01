@@ -76,7 +76,14 @@ def test_pii_roles_allowed_with_masking():
     r = RBACMiddleware()
     assert r.check("doctor", "get_patient").allowed is True
     assert r.check("admin_staff", "get_patient").allowed is True
-    assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "admin_staff")["cmnd"] == "[MASKED]"
+    pii_in = {"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y", "tom_tat_benh_an": "S", "phac_do_dieu_tri": "P"}
+    res_staff = r.mask_pii(pii_in, "admin_staff")
+    assert res_staff["cmnd"] == "1"
+    assert res_staff["tom_tat_benh_an"] == "[MASKED]"
+    assert res_staff["phac_do_dieu_tri"] == "[MASKED]"
+    res_doctor = r.mask_pii(pii_in, "doctor")
+    assert res_doctor["tom_tat_benh_an"] == "S"
+    assert res_doctor["phac_do_dieu_tri"] == "P"
 
 def test_keyword_search_roles_allowed():
     r = RBACMiddleware()
@@ -220,7 +227,7 @@ def test_abac_admin_staff_masks_diagnosis_not_billing():
     policy, Subject = _abac()
     d = policy.evaluate(Subject(role="admin_staff"), "avg_vien_phi")
     assert d.allowed is True
-    assert "ma_benh" in d.masked_fields   # không xem chẩn đoán
+    assert "ma_benh" not in d.masked_fields   # Được phép xem chẩn đoán theo phân quyền mới
     assert "vien_phi" not in d.masked_fields  # vẫn xem viện phí
 
 def test_abac_doctor_sum_denied_by_rbac_layer():
