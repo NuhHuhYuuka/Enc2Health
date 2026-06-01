@@ -3,6 +3,8 @@ set -euo pipefail
 
 AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-32-bytes-long-1234567890}
 export AUTH_JWT_SECRET
+EHR_RECORD_COUNT=${EHR_RECORD_COUNT:-10000}
+EHR_BATCH_SIZE=${EHR_BATCH_SIZE:-500}
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CERT_DIR="$REPO_ROOT/certs"
@@ -166,8 +168,8 @@ KEY_DIR="$REPO_ROOT/crypto/data/keys"
 mkdir -p "$KEY_DIR"
 
 if [[ "$SKIP_SEED" -eq 0 ]]; then
-  echo "[smoke-local] seeding data into MongoDB..."
-  MONGO_URI=${MONGO_URI} MONGO_DB=enc2health MONGO_COLLECTION=patient_records EHR_RECORD_COUNT=100 EHR_BATCH_SIZE=50 EHR_FORCE_RECREATE=1 \
+  echo "[smoke-local] seeding ${EHR_RECORD_COUNT} records into MongoDB..."
+  MONGO_URI=${MONGO_URI} MONGO_DB=enc2health MONGO_COLLECTION=patient_records EHR_RECORD_COUNT=${EHR_RECORD_COUNT} EHR_BATCH_SIZE=${EHR_BATCH_SIZE} EHR_FORCE_RECREATE=1 \
     "$VENV_PY" crypto/data/generate_ehr.py
 else
   echo "[smoke-local] skipping seeding. ECALL pool will use mock dataset."
