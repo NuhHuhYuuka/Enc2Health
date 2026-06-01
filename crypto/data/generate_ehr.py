@@ -88,33 +88,129 @@ CLINICAL_NOTE_TEMPLATES = [
 ]
 
 CLINICAL_SUMMARIES = {
-    "P01": "Bệnh nhi ho nhiều, sốt cao, khò khè, phổi có rít ẩm, X-quang phổi có tổn thương thâm nhiễm.",
-    "P02": "Bệnh nhi sốt cao liên tục ngày thứ 4, xuất hiện xuất huyết dưới da, tiểu cầu giảm mạnh.",
-    "C01": "Bệnh nhân thường xuyên đau đầu, chóng mặt, đo huyết áp ghi nhận trị số 160/90 mmHg kéo dài.",
-    "C02": "Bệnh nhân đau tức ngực trái khi gắng sức, điện tâm đồ có dấu hiệu thiếu máu cơ tim vùng hoành.",
-    "I01": "Bệnh nhân có triệu chứng ăn nhiều, uống nhiều, tiểu nhiều, sụt cân, xét nghiệm glucose máu đói 8.5 mmol/L.",
-    "I02": "Bệnh nhân mệt mỏi, phù hai chi dưới, thiếu máu nhẹ, ure và creatinine máu tăng cao (creatinine 350 umol/L).",
-    "N01": "Bệnh nhân mất ngủ kéo dài, buồn bã vô cớ, suy giảm năng lượng, có suy nghĩ tiêu cực.",
-    "N02": "Bệnh nhân đau dọc đường đi của dây thần kinh hông to một bên, tăng lên khi ho hoặc cúi người.",
-    "S01": "Bệnh nhân đau âm ỉ hố chậu phải tăng dần, có phản ứng thành bụng, sốt nhẹ 38 độ C.",
-    "S02": "Bệnh nhân đau quặn hạ sườn phải lan lên vai phải sau bữa ăn nhiều dầu mỡ, siêu âm có sỏi bùn túi mật.",
-    "E01": "Bệnh nhân nhập viện trong tình trạng sốc chấn thương, đa vết thương phần mềm, nghi gãy xương đùi.",
-    "E02": "Bệnh nhân nôn mửa, đau bụng quặn thắt, đi ngoài nhiều lần sau khi ăn hải sản không rõ nguồn gốc.",
+    "P01": [
+        "Bệnh nhi ho nhiều, sốt cao, khò khè, phổi có rít ẩm, X-quang phổi có tổn thương thâm nhiễm.",
+        "Trẻ sốt nhẹ kèm ho khan kéo dài, thở rút lõm lồng ngực nhẹ, nghe phổi có ran ẩm vùng đáy phổi.",
+        "Bệnh nhi nhập viện do ho có đờm xanh, sốt cao 39 độ, thở nhanh nông, X-quang phổi có đám mờ rải rác."
+    ],
+    "P02": [
+        "Bệnh nhi sốt cao liên tục ngày thứ 4, xuất hiện xuất huyết dưới da, tiểu cầu giảm mạnh.",
+        "Trẻ sốt cao ngày thứ 3 kèm đau đầu, đau hốc mắt, chảy máu cam nhẹ, xét nghiệm NS1Ag dương tính.",
+        "Bệnh nhi sốt ngày thứ 5, mệt lả, nôn nhiều, đau bụng vùng gan, hematocrit tăng cao kèm tiểu cầu < 50 G/L."
+    ],
+    "C01": [
+        "Bệnh nhân thường xuyên đau đầu, chóng mặt, đo huyết áp ghi nhận trị số 160/90 mmHg kéo dài.",
+        "Đo huyết áp khám sức khỏe định kỳ ghi nhận 150/95 mmHg, có tiền sử gia đình bị tai biến mạch máu não.",
+        "Bệnh nhân nhập viện vì cơn tăng huyết áp kịch phát 180/100 mmHg kèm hồi hộp trống ngực dữ dội."
+    ],
+    "C02": [
+        "Bệnh nhân đau tức ngực trái khi gắng sức, điện tâm đồ có dấu hiệu thiếu máu cơ tim vùng hoành.",
+        "Bệnh nhân đau thắt ngực ổn định lan lên vai trái, giảm khi nghỉ ngơi, có tiền sử xơ vữa động mạch.",
+        "Đau nặng ngực trái âm ỉ kèm khó thở nhẹ khi đi bộ đường dài, chụp động mạch vành phát hiện hẹp nhẹ."
+    ],
+    "I01": [
+        "Bệnh nhân có triệu chứng ăn nhiều, uống nhiều, tiểu nhiều, sụt cân, xét nghiệm glucose máu đói 8.5 mmol/L.",
+        "Bệnh nhân tê bì hai bàn chân, kiểm tra đường huyết ngẫu nhiên đạt 11.2 mmol/L, HbA1c ghi nhận 7.8%.",
+        "Phát hiện tăng đường huyết khi khám định kỳ (glucose đói 7.6 mmol/L), thể trạng béo phì trung tâm."
+    ],
+    "I02": [
+        "Bệnh nhân mệt mỏi, phù hai chi dưới, thiếu máu nhẹ, ure và creatinine máu tăng cao (creatinine 350 umol/L).",
+        "Bệnh nhân tiểu ít, phù toàn thân kèm khó thở khi nằm, creatinine 580 umol/L, Kali máu tăng.",
+        "Phát hiện suy giảm chức năng thận mạn tiến triển từ đái tháo đường, creatinine 420 umol/L kèm protein niệu thể nặng."
+    ],
+    "N01": [
+        "Bệnh nhân mất ngủ kéo dài, buồn bã vô cớ, suy giảm năng lượng, có suy nghĩ tiêu cực.",
+        "Bệnh nhân chán ăn, sụt cân, không còn hứng thú với sở thích cũ, thường xuyên cảm thấy tội lỗi và vô dụng.",
+        "Bệnh nhân mệt mỏi cùng cực, giảm tập trung chú ý, cô lập bản thân và có hành vi làm đau cơ thể."
+    ],
+    "N02": [
+        "Bệnh nhân đau dọc đường đi của dây thần kinh hông to một bên, tăng lên khi ho hoặc cúi người.",
+        "Đau vùng thắt lưng lan xuống mông và mặt sau đùi phải, kèm cảm giác tê bì ngón chân cái.",
+        "Đau nhức cột sống thắt lưng cấp tính sau khi bê vật nặng, kết quả MRI ghi nhận thoát vị đĩa đệm L4-L5 chèn ép rễ."
+    ],
+    "S01": [
+        "Bệnh nhân đau âm ỉ hố chậu phải tăng dần, có phản ứng thành bụng, sốt nhẹ 38 độ C.",
+        "Đau đầu vị thượng vị sau lan xuống hố chậu phải, buồn nôn, ấn đau điểm ruột thừa, bạch cầu tăng cao.",
+        "Đau hố chậu phải dữ dội kèm sốt 38.5 độ, siêu âm thấy hình ảnh ruột thừa sưng to đường kính 8mm."
+    ],
+    "S02": [
+        "Bệnh nhân đau quặn hạ sườn phải lan lên vai phải sau bữa ăn nhiều dầu mỡ, siêu âm có sỏi bùn túi mật.",
+        "Bệnh nhân đau tức hạ sườn phải âm ỉ kéo dài, siêu âm ghi nhận sỏi túi mật kích thước lớn 15mm.",
+        "Đau quặn mật tái phát nhiều lần kèm đầy bụng, ăn uống khó tiêu, thành túi mật không dày."
+    ],
+    "E01": [
+        "Bệnh nhân nhập viện trong tình trạng sốc chấn thương, đa vết thương phần mềm, nghi gãy xương đùi.",
+        "Nhập viện cấp cứu sau tai nạn giao thông: tri giác lơ mơ, chấn thương sọ não kín kèm tràn dịch màng phổi nhẹ.",
+        "Bệnh nhân gãy hở xương cẳng chân trái, chấn thương bụng kín nghi vỡ lách độ 2 do ngã cao."
+    ],
+    "E02": [
+        "Bệnh nhân nôn mửa, đau bụng quặn thắt, đi ngoài nhiều lần sau khi ăn hải sản không rõ nguồn gốc.",
+        "Bệnh nhân sốt nhẹ, đi ngoài phân lỏng tóe nước liên tục ngày thứ 2, có dấu hiệu mất nước nhẹ (môi khô, khát nước).",
+        "Đau bụng quặn thắt quanh rốn, sốt 38.2 độ, nôn nhiều lần kèm đi ngoài phân có chất nhầy sau ăn tiệc cưới."
+    ],
 }
 
 TREATMENT_PROTOCOLS = {
-    "P01": "Kháng sinh Amoxicillin phối hợp, hạ sốt bằng Paracetamol, khí dung giãn phế quản, bổ sung nước điện giải.",
-    "P02": "Bù dịch tĩnh mạch theo phác đồ chống sốc Dengue, theo dõi sát mạch, huyết áp và số lượng tiểu cầu hàng giờ.",
-    "C01": "Chỉ định dùng thuốc hạ áp Amlodipine 5mg uống sáng, hạn chế ăn mặn, tập thể dục nhẹ nhàng.",
-    "C02": "Dùng Aspirin 81mg chống ngưng tập tiểu cầu, Atorvastatin 20mg kiểm soát mỡ máu, giảm gắng sức.",
-    "I01": "Điều trị bằng Metformin 850mg uống sau ăn, tư vấn chế độ ăn giảm tinh bột, theo dõi đường huyết đói hàng tuần.",
-    "I02": "Chế độ ăn giảm đạm, kiểm soát huyết áp bằng ARB, bổ sung Erythropoietin kích hồng cầu, chuẩn bị lọc máu chu kỳ.",
-    "N01": "Sử dụng thuốc chống trầm cảm dòng SSRI (Sertraline 50mg), kết hợp trị liệu tâm lý nhận thức hành vi.",
-    "N02": "Giảm đau bằng NSAID (Meloxicam 15mg), uống bổ sung vitamin nhóm B, hạn chế mang vác vật nặng.",
-    "S01": "Chỉ định mổ nội soi cắt ruột thừa cấp cứu, kháng sinh dự phòng cefuroxime + metronidazole.",
-    "S02": "Chỉ định phẫu thuật nội soi cắt túi mật chủ động, tư vấn chế độ ăn ít chất béo sau mổ.",
-    "E01": "Cố định xương gãy, truyền dịch chống sốc, chụp CT toàn thân xác định tổn thương nội tạng, hội chẩn mổ khẩn.",
-    "E02": "Truyền dịch bù nước điện giải Ringer Lactate, uống than hoạt tính hấp phụ độc tố, dùng kháng sinh đường ruột nếu nhiễm khuẩn.",
+    "P01": [
+        "Kháng sinh Amoxicillin phối hợp, hạ sốt bằng Paracetamol, khí dung giãn phế quản, bổ sung nước điện giải.",
+        "Dùng kháng sinh Ceftriaxone tiêm tĩnh mạch, hỗ trợ thở oxy mask, truyền dịch điện giải và vỗ rung lồng ngực.",
+        "Chỉ định kháng sinh nhóm Macrolide (Azithromycin), thuốc ho thảo dược, hạ sốt khi sốt trên 38.5 độ C, nằm đầu cao."
+    ],
+    "P02": [
+        "Bù dịch tĩnh mạch theo phác đồ chống sốc Dengue, theo dõi sát mạch, huyết áp và số lượng tiểu cầu hàng giờ.",
+        "Hạ sốt bằng Paracetamol (tránh Ibuprofen), uống nhiều nước oresol bù điện giải, theo dõi các dấu hiệu cảnh báo.",
+        "Truyền dịch Ringer Lactate khống chế tốc độ, theo dõi sát lượng nước tiểu và công thức máu mỗi 6-12 giờ."
+    ],
+    "C01": [
+        "Chỉ định dùng thuốc hạ áp Amlodipine 5mg uống sáng, hạn chế ăn mặn, tập thể dục nhẹ nhàng.",
+        "Phối hợp thuốc Coversyl 5mg uống sáng kèm lợi tiểu nhẹ Indapamide, tư vấn giảm cân và hạn chế muối.",
+        "Sử dụng Losartan 50mg uống tối, đo huyết áp tại nhà 2 lần/ngày, tái khám định kỳ sau 2 tuần."
+    ],
+    "C02": [
+        "Dùng Aspirin 81mg chống ngưng tập tiểu cầu, Atorvastatin 20mg kiểm soát mỡ máu, giảm gắng sức.",
+        "Chỉ định thuốc chẹn beta (Metoprolol 25mg), Nitroglycerin xịt dưới lưỡi khi có cơn đau ngực, kiểm soát HA.",
+        "Sử dụng Clopidogrel 75mg thay thế, kết hợp Vastarel MR uống ngày 2 lần, tư vấn chế độ ăn ít lipid."
+    ],
+    "I01": [
+        "Điều trị bằng Metformin 850mg uống sau ăn, tư vấn chế độ ăn giảm tinh bột, theo dõi đường huyết đói hàng tuần.",
+        "Sử dụng phối hợp Metformin 500mg và Gliclazide 30mg uống trước ăn sáng, tư vấn luyện tập thể lực 30p/ngày.",
+        "Chỉ định dùng Glucophage XR 1000mg tối, hạn chế chất ngọt, kiểm tra HbA1c và chức năng thận định kỳ mỗi 3 tháng."
+    ],
+    "I02": [
+        "Chế độ ăn giảm đạm, kiểm soát huyết áp bằng ARB, bổ sung Erythropoietin kích hồng cầu, chuẩn bị lọc máu chu kỳ.",
+        "Chỉ định hạn chế nước và muối uống, dùng thuốc lợi tiểu Quai (Furosemide 40mg), chuẩn bị làm cầu nối động tĩnh mạch (FAV).",
+        "Lọc màng bụng tại nhà hàng ngày hoặc chạy thận nhân tạo 3 lần/tuần, dùng thêm canxi cacbonat uống giảm phosphat máu."
+    ],
+    "N01": [
+        "Sử dụng thuốc chống trầm cảm dòng SSRI (Sertraline 50mg), kết hợp trị liệu tâm lý nhận thức hành vi.",
+        "Chỉ định dùng Escitalopram 10mg uống sáng, tư vấn người nhà giám sát chặt chẽ, kết hợp thiền và vận động nhẹ.",
+        "Sử dụng Fluoxetine 20mg uống sau ăn sáng, hội chẩn chuyên khoa tâm thần định kỳ hàng tuần, trị liệu gia đình."
+    ],
+    "N02": [
+        "Giảm đau bằng NSAID (Meloxicam 15mg), uống bổ sung vitamin nhóm B, hạn chế mang vác vật nặng.",
+        "Sử dụng Paracetamol phối hợp Tramadol khi đau nhiều, nằm giường cứng nghỉ ngơi, tập vật lý trị liệu kéo giãn cột sống.",
+        "Dùng Celecoxib 200mg/ngày, kết hợp thuốc giãn cơ Mydocalm 150mg, chỉ định đeo đai thắt lưng khi đi lại."
+    ],
+    "S01": [
+        "Chỉ định mổ nội soi cắt ruột thừa cấp cứu, kháng sinh dự phòng cefuroxime + metronidazole.",
+        "Chuẩn bị mổ nội soi cắt ruột thừa khẩn cấp, truyền dịch bồi hoàn, nhịn ăn uống tuyệt đối.",
+        "Phẫu thuật nội soi cắt ruột thừa trong ngày, theo dõi sát dấu hiệu sinh tồn và tình trạng đau bụng sau mổ."
+    ],
+    "S02": [
+        "Chỉ định phẫu thuật nội soi cắt túi mật chủ động, tư vấn chế độ ăn ít chất béo sau mổ.",
+        "Tạm thời dùng thuốc giảm co thắt cơ trơn (Spasfon), theo dõi biến chứng viêm túi mật cấp để chỉ định mổ chương trình.",
+        "Phẫu thuật nội soi cắt túi mật trì hoãn, hạn chế ăn thức ăn nhiều cholesterol và dầu mỡ động vật."
+    ],
+    "E01": [
+        "Cổ định xương gãy, truyền dịch chống sốc, chụp CT toàn thân xác định tổn thương nội tạng, hội chẩn mổ khẩn.",
+        "Truyền dịch điện giải và dung dịch keo chống sốc, đặt ống nội khí quản hỗ trợ hô hấp, chuyển phòng mổ xử trí chấn thương.",
+        "Giảm đau toàn thân cực mạnh, truyền máu cùng nhóm, mổ cấp cứu kết hợp xương và nội soi thăm dò ổ bụng."
+    ],
+    "E02": [
+        "Truyền dịch bù nước điện giải Ringer Lactate, uống than hoạt tính hấp phụ độc tố, dùng kháng sinh đường ruột nếu nhiễm khuẩn.",
+        "Bù dịch bằng Oresol đường uống liều lượng lớn, dùng thuốc bảo vệ niêm mạc ruột Smecta, theo dõi sát điện giải đồ.",
+        "Truyền dịch tĩnh mạch bù nước khẩn cấp, sử dụng men vi sinh Probiotics, dùng kháng sinh Ciprofloxacin uống nếu sốt cao."
+    ],
 }
 
 def random_date(start_year=2020, end_year=2024) -> date:
@@ -246,8 +342,8 @@ def main():
             diagnosis=chan_doan,
             dept=dept.replace("_", " "),
         )
-        tom_tat_benh_an = CLINICAL_SUMMARIES[ma_benh]
-        phac_do_dieu_tri = TREATMENT_PROTOCOLS[ma_benh]
+        tom_tat_benh_an = random.choice(CLINICAL_SUMMARIES[ma_benh])
+        phac_do_dieu_tri = random.choice(TREATMENT_PROTOCOLS[ma_benh])
         ket_qua_xn = {
             "glucose": round(random.uniform(3.5, 15.0), 1),   # mmol/L
             "hba1c":   round(random.uniform(4.0, 12.0), 1),   # %
