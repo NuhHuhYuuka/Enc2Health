@@ -1,0 +1,132 @@
+{
+  "attack": "SelAttack-epsilon DTE ma_benh_enc",
+  "source": "mongo",
+  "epsilon": 0.3,
+  "reveal_strategy": "top",
+  "n_groups": 8,
+  "n_records": 10000,
+  "candidate_plaintexts": [
+    "I10",
+    "E11",
+    "M54",
+    "K29",
+    "J18",
+    "I25",
+    "J45",
+    "F32",
+    "N18"
+  ],
+  "aux_distribution_rho": {
+    "I10": 0.2,
+    "E11": 0.15,
+    "M54": 0.13,
+    "K29": 0.12,
+    "J18": 0.1,
+    "I25": 0.09,
+    "J45": 0.08,
+    "F32": 0.07,
+    "N18": 0.06
+  },
+  "revealed": [
+    {
+      "rank": 1,
+      "count": 1291,
+      "plaintext": "I25",
+      "ciphertext_prefix": "6aJ/rriJvpnWCT26e5..."
+    },
+    {
+      "rank": 2,
+      "count": 1281,
+      "plaintext": "F32",
+      "ciphertext_prefix": "Kwog4wBWcJrqWQ/a7U..."
+    }
+  ],
+  "baseline_random_unique": {
+    "value_recovery_rate": 0.375,
+    "row_recovery_rate": 0.3784,
+    "correct_values": 3,
+    "total_values": 8,
+    "correct_rows": 3784,
+    "total_rows": 10000
+  },
+  "sela_mle_dp": {
+    "value_recovery_rate": 0.25,
+    "row_recovery_rate": 0.2572,
+    "correct_values": 2,
+    "total_values": 8,
+    "correct_rows": 2572,
+    "total_rows": 10000,
+    "log_likelihood": -307.4372
+  },
+  "bipartite_full_revealed_oracle": {
+    "value_recovery_rate": 1.0,
+    "row_recovery_rate": 1.0,
+    "correct_values": 8,
+    "total_values": 8,
+    "correct_rows": 10000,
+    "total_rows": 10000
+  },
+  "assignment_preview": [
+    {
+      "ciphertext_prefix": "6aJ/rriJvpnWCT26e5...",
+      "count": 1291,
+      "guess": "I25",
+      "truth": "I25",
+      "correct": true
+    },
+    {
+      "ciphertext_prefix": "Kwog4wBWcJrqWQ/a7U...",
+      "count": 1281,
+      "guess": "F32",
+      "truth": "F32",
+      "correct": true
+    },
+    {
+      "ciphertext_prefix": "Jz7bGpfSxYMKpviaq2...",
+      "count": 1267,
+      "guess": "I10",
+      "truth": "J18",
+      "correct": false
+    },
+    {
+      "ciphertext_prefix": "rscDtymPdB16NihuND...",
+      "count": 1267,
+      "guess": "E11",
+      "truth": "I10",
+      "correct": false
+    },
+    {
+      "ciphertext_prefix": "5rr/ORuh3LYcU3qStt...",
+      "count": 1261,
+      "guess": "M54",
+      "truth": "K29",
+      "correct": false
+    },
+    {
+      "ciphertext_prefix": "S7mNacYHYdnEIPUYBW...",
+      "count": 1225,
+      "guess": "K29",
+      "truth": "E11",
+      "correct": false
+    },
+    {
+      "ciphertext_prefix": "6rvlcvYo2Gs5esJz+l...",
+      "count": 1212,
+      "guess": "J18",
+      "truth": "N18",
+      "correct": false
+    },
+    {
+      "ciphertext_prefix": "p6M1WjbBoUU8NxrZTH...",
+      "count": 1196,
+      "guess": "J45",
+      "truth": "M54",
+      "correct": false
+    }
+  ],
+  "notes": [
+    "Evaluator uses the local DTE key only to label ground truth; the attack itself uses leakage counts, rho, and epsilon revealed mappings.",
+    "Poisson likelihood uses lambda = total_records * rho[plaintext].",
+    "DP enforces one ciphertext group maps to at most one ICD-10 plaintext."
+  ]
+}
