@@ -12,3 +12,4 @@ python-dotenv
 pydantic
 pytest
 PyJWT
+duckdb

@@ -40,7 +40,7 @@ services:
       EHR_FORCE_RECREATE: ${EHR_FORCE_RECREATE:-1}
     command: ["python", "crypto/data/generate_ehr.py"]
     volumes:
-      - keys_data:/app/crypto/data/keys
+      - ./crypto/data/keys:/app/crypto/data/keys
     restart: "no"
 
   ecall-task-pool:
@@ -75,10 +75,10 @@ services:
     ports:
       - "9091:9091"
     volumes:
-      - keys_data:/app/crypto/data/keys
+      - ./crypto/data/keys:/app/crypto/data/keys
       - mtls_certs:/certs
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,sys,httpx; verify='/certs/ca.crt'; cert=('/certs/client.crt','/certs/client.key'); r=httpx.get('https://127.0.0.1:9091/health', verify=verify, cert=cert, timeout=5); sys.exit(0 if r.status_code==200 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import sys,requests; verify='/certs/ca.crt'; cert=('/certs/client.crt','/certs/client.key'); r=requests.get('https://127.0.0.1:9091/health', verify=verify, cert=cert, timeout=5); sys.exit(0 if r.status_code==200 else 1)\""]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -113,7 +113,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - keys_data:/app/crypto/data/keys
+      - ./crypto/data/keys:/app/crypto/data/keys
       - mtls_certs:/certs
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)\""]
@@ -124,5 +124,4 @@ services:
 
 volumes:
   mongo_data:
-  keys_data:
   mtls_certs:

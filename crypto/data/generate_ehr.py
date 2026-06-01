@@ -23,6 +23,7 @@ RECORD_COUNT = int(os.getenv("EHR_RECORD_COUNT", "10000"))
 BATCH_SIZE   = int(os.getenv("EHR_BATCH_SIZE", "500"))
 FORCE_RECREATE = os.getenv("EHR_FORCE_RECREATE", "0") == "1"
 DATASET_SEED = int(os.getenv("EHR_RANDOM_SEED", "42"))
+ALLOW_KEY_CREATE = os.getenv("EHR_ALLOW_KEY_CREATE", "0") == "1"
 
 random.seed(DATASET_SEED)
 Faker.seed(DATASET_SEED)
@@ -55,23 +56,27 @@ def birth_date_from_age(admission_date: date, age: int) -> date:
     return admission_date - timedelta(days=days)
 
 
-def _load_or_create_cipher(cipher_cls, key_path: Path):
+def _load_required_cipher(cipher_cls, key_path: Path):
     if key_path.exists():
         return cipher_cls.load_key(str(key_path))
+    if not ALLOW_KEY_CREATE:
+        raise FileNotFoundError(
+            f"Missing required key: {key_path}. "
+            "Pull the shared crypto/data/keys files first, or set EHR_ALLOW_KEY_CREATE=1 only to bootstrap new dev keys."
+        )
     cipher = cipher_cls()
     key_path.parent.mkdir(parents=True, exist_ok=True)
     cipher.save_key(str(key_path))
     return cipher
 
 
-def _load_or_create_dept_keypairs(key_dir: Path) -> dict:
-    """Keypair Khoa DÙNG CHUNG cả nhóm: nạp từ file nếu đã có, chỉ sinh mới khi thiếu.
+def _load_dept_keypairs(key_dir: Path) -> dict:
+    """Load the shared department keypairs used by the whole team.
 
-    Nhờ vậy public/private PEM ổn định — không random lại mỗi lần chạy → hết
-    xung đột pull/push. (Trước đây luôn gọi generate_all_department_keypairs nên
-    mỗi người chạy ra key khác nhau.)
+    By default this script refuses to generate missing keys, so reseeding cannot
+    silently drift away from the committed team keyset. Set EHR_ALLOW_KEY_CREATE=1
+    only when intentionally bootstrapping a new dev keyset.
     """
-    from crypto.asym import generate_ecc_keypair
     from cryptography.hazmat.primitives import serialization
 
     def keypair_matches(private_pem: bytes, public_pem: bytes) -> bool:
@@ -89,6 +94,12 @@ def _load_or_create_dept_keypairs(key_dir: Path) -> dict:
         if pub_path.exists() and priv_path.exists() and keypair_matches(priv_path.read_bytes(), pub_path.read_bytes()):
             result[dept] = {"public_pem": pub_path.read_text()}
         else:
+            if not ALLOW_KEY_CREATE:
+                raise FileNotFoundError(
+                    f"Missing or mismatched department keypair for {dept}: {pub_path}, {priv_path}. "
+                    "Pull the shared crypto/data/keys files first, or set EHR_ALLOW_KEY_CREATE=1 only to bootstrap new dev keys."
+                )
+            from crypto.asym import generate_ecc_keypair
             priv, pub = generate_ecc_keypair()
             key_dir.mkdir(parents=True, exist_ok=True)
             pub_path.write_text(pub.decode())
@@ -99,22 +110,22 @@ def _load_or_create_dept_keypairs(key_dir: Path) -> dict:
 def main():
     key_dir = Path(__file__).resolve().parent / "keys"
 
-    print("[1/5] Đồng bộ keypair Khoa (ECC P-384) — DÙNG CHUNG, nạp nếu đã có...")
+    print("[1/5] Nạp keypair Khoa (ECC P-384) từ bộ key dùng chung...")
     key_dir.mkdir(parents=True, exist_ok=True)
-    dept_keypairs = _load_or_create_dept_keypairs(key_dir)
-    print(f"  {len(dept_keypairs)} khoa: dùng key chung tại {key_dir} (không random lại nếu đã có)")
+    dept_keypairs = _load_dept_keypairs(key_dir)
+    print(f"  {len(dept_keypairs)} khoa: dùng key chung tại {key_dir}")
 
-    print("[2/5] Khởi tạo các cipher...")
+    print("[2/5] Nạp các cipher key đã có...")
     # DTE: mỗi field 1 key riêng
-    dte_ma_benh   = _load_or_create_cipher(DTECipher, key_dir / "dte_ma_benh.key")
-    dte_khoa      = _load_or_create_cipher(DTECipher, key_dir / "dte_khoa.key")
+    dte_ma_benh   = _load_required_cipher(DTECipher, key_dir / "dte_ma_benh.key")
+    dte_khoa      = _load_required_cipher(DTECipher, key_dir / "dte_khoa.key")
     # ORE: 1 key cho tất cả integer/date fields
-    ore = _load_or_create_cipher(ORECipher, key_dir / "ore.key")
+    ore = _load_required_cipher(ORECipher, key_dir / "ore.key")
     # AES-GCM: DEK cho lab results & billing
-    gcm = _load_or_create_cipher(AESGCMCipher, key_dir / "gcm_dek.key")
+    gcm = _load_required_cipher(AESGCMCipher, key_dir / "gcm_dek.key")
 
     # NOTE: Do NOT write raw cipher keys or DEKs to disk. Store them into Vault or use envelope encryption.
-    print("  Cipher keys generated in-memory. DO NOT write raw keys to disk — push to Vault instead.")
+    print("  Loaded existing keys. Missing keys will fail unless EHR_ALLOW_KEY_CREATE=1.")
 
     print("[3/5] Kết nối MongoDB...")
     client = MongoClient(MONGO_URI)
