@@ -8,6 +8,7 @@ encrypted columns, while count can use the same query pipeline.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
@@ -19,16 +20,25 @@ from bson import ObjectId
 from crypto.crypto.dte import DTECipher
 from crypto.crypto.gcm import AESGCMCipher
 from crypto.crypto.ore import ORECipher
+from crypto.crypto.sse import StaticSSECipher, normalize_keyword, tokenize_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 DEFAULT_DB_NAME = os.environ.get("MONGO_DB", "enc2health")
 DEFAULT_COLLECTION = os.environ.get("MONGO_COLLECTION", "patient_records")
+DEFAULT_SSE_COLLECTION = os.environ.get("SSE_COLLECTION", "sse_index")
 KEY_DIR = Path(os.environ.get("ENC2HEALTH_KEY_DIR", REPO_ROOT / "crypto" / "data" / "keys"))
-# Expect clients to provide real ICD-10 codes (e.g., "E11").
+# Expect clients to provide demo disease codes (e.g., "I01").
 ICD10_ALIASES = {}
 STRICT_MODE = os.environ.get("SOFTWARE_STRICT_MODE", "0") == "1"
+DEMO_DISEASE_CODE_RE = re.compile(r"^[A-Za-z]\d{2}$")
+
+
+def canonicalize_disease_code(value: Any) -> str:
+    """Keep demo disease-code letters uppercase: p01 -> P01."""
+    text = str(value).strip()
+    return text.upper() if DEMO_DISEASE_CODE_RE.fullmatch(text) else text
 
 
 @dataclass
@@ -48,11 +58,13 @@ class SoftwareExecutor:
             socketTimeoutMS=timeout_ms,
         )
         self.collection = self.client[DEFAULT_DB_NAME][DEFAULT_COLLECTION]
+        self.sse_collection = self.client[DEFAULT_DB_NAME][DEFAULT_SSE_COLLECTION]
         self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key")
         self._dte_khoa = self._load_dte_cipher("dte_khoa.key")
         self._dte_cmnd = self._load_dte_cipher("dte_cmnd.key")
         self._gcm = self._load_gcm_cipher("gcm_dek.key")
         self._ore = self._load_ore_cipher("ore.key")
+        self._sse = self._load_sse_cipher("sse.key")
         self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
         self._mongo_available = self._detect_mongo_available()
         if STRICT_MODE and not self._mongo_available:
@@ -76,11 +88,17 @@ class SoftwareExecutor:
             return None
         return AESGCMCipher.load_key(str(path))
 
+    def _load_sse_cipher(self, filename: str) -> StaticSSECipher | None:
+        path = KEY_DIR / filename
+        if not path.exists():
+            return None
+        return StaticSSECipher.load_key(str(path))
+
     def _build_filter(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         query: Dict[str, Any] = {}
 
         if "ma_benh" in filters and self._dte_ma_benh is not None:
-            ma_benh = str(filters["ma_benh"])
+            ma_benh = canonicalize_disease_code(filters["ma_benh"])
             query["ma_benh_enc"] = self._dte_ma_benh.encrypt(
                 ma_benh,
                 b"field:ma_benh",
@@ -102,15 +120,23 @@ class SoftwareExecutor:
         return query
 
     def _build_fallback_records(self, n_records: int) -> list[dict[str, Any]]:
-        diseases = ["E11", "I10", "J18", "K29", "M54", "N18"]
-        departments = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
+        diseases_by_dept = {
+            "Noi": ["I01", "I02"],
+            "Ngoai": ["S01", "S02"],
+            "Cap_cuu": ["E01", "E02"],
+            "Tim_mach": ["C01", "C02"],
+            "Than_kinh": ["N01", "N02"],
+            "Nhi": ["P01", "P02"],
+        }
+        departments = list(diseases_by_dept)
         records: list[dict[str, Any]] = []
         for index in range(n_records):
+            dept = departments[index % len(departments)]
             records.append(
                 {
-                    "ma_benh": diseases[index % len(diseases)],
-                    "tuoi": 18 + (index % 78),
-                    "khoa": departments[index % len(departments)],
+                    "ma_benh": diseases_by_dept[dept][index % 2],
+                    "tuoi": 1 + (index % 15) if dept == "Nhi" else 16 + (index % 80),
+                    "khoa": dept,
                     "vien_phi": float(900 + (index % 9100)),
                 }
             )
@@ -119,7 +145,7 @@ class SoftwareExecutor:
     def _fallback_count(self, filters: Dict[str, Any]) -> int:
         records = self._fallback_records
         if "ma_benh" in filters:
-            ma_benh = str(filters["ma_benh"])
+            ma_benh = canonicalize_disease_code(filters["ma_benh"])
             records = [r for r in records if r["ma_benh"] == ma_benh]
         if "khoa_phong" in filters:
             records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]
@@ -131,10 +157,28 @@ class SoftwareExecutor:
             records = [r for r in records if r["tuoi"] <= max_age]
         return len(records)
 
+    def _fallback_keyword_search(self, keyword: str, filters: Dict[str, Any]) -> dict[str, Any]:
+        normalized = normalize_keyword(keyword)
+        rows = []
+        for index, record in enumerate(self._fallback_records):
+            haystack = " ".join([record["ma_benh"], record["khoa"]]).casefold()
+            if normalized and normalized in haystack:
+                rows.append({"patient_id": f"fallback-{index}", "dept": record["khoa"]})
+        if "khoa_phong" in filters:
+            rows = [row for row in rows if row["dept"] == str(filters["khoa_phong"])]
+        return {
+            "keyword": normalized,
+            "token": None,
+            "n_records": len(rows),
+            "volume_leakage": len(rows),
+            "postings": rows,
+            "note": "SSE fallback mock path",
+        }
+
     def _fallback_aggregate(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
         records = self._fallback_records
         if "ma_benh" in filters:
-            ma_benh = str(filters["ma_benh"])
+            ma_benh = canonicalize_disease_code(filters["ma_benh"])
             records = [r for r in records if r["ma_benh"] == ma_benh]
         if "khoa_phong" in filters:
             records = [r for r in records if r["khoa"] == str(filters["khoa_phong"])]
@@ -258,6 +302,75 @@ class SoftwareExecutor:
             "patient_id": record.get("patient_id"),
             "pii_enc": record["pii_enc"],
             "dept": dept,
+        }
+
+    def keyword_search(self, keyword: str, filters: Dict[str, Any] | None = None, limit: int = 20) -> dict[str, Any]:
+        """Search static SSE index by keyword token.
+
+        Server-side Mongo sees only the deterministic HMAC token and result
+        volume. Router decrypts posting lists with the SSE key, matching the
+        project's Software-mode SSE baseline.
+        """
+        filters = filters or {}
+        display_keyword = canonicalize_disease_code(keyword)
+        normalized = normalize_keyword(display_keyword)
+        if not normalized:
+            raise ValueError("keyword is required")
+        if not self._mongo_available:
+            if STRICT_MODE:
+                raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids SSE fallback path")
+            return self._fallback_keyword_search(normalized, filters)
+        if self._sse is None:
+            raise RuntimeError("sse key not available")
+
+        exact_token = self._sse.token(normalized)
+        row = self.sse_collection.find_one({"token": exact_token}, {"_id": 0})
+        query_tokens = [exact_token]
+        rows = [row] if row else []
+
+        if not rows:
+            keyword_tokens = tokenize_text(normalized)
+            if len(keyword_tokens) > 1:
+                query_tokens = [self._sse.token(token) for token in keyword_tokens]
+                rows = list(self.sse_collection.find({"token": {"$in": query_tokens}}, {"_id": 0}))
+
+        if not rows:
+            return {
+                "keyword": display_keyword if display_keyword != normalized else normalized,
+                "token": exact_token,
+                "tokens": query_tokens,
+                "n_records": 0,
+                "volume_leakage": 0,
+                "postings": [],
+                "note": "Static SSE encrypted index",
+            }
+
+        posting_sets: list[dict[str, dict[str, Any]]] = []
+        volume_leakage = 0
+        for matched_row in rows:
+            volume_leakage += int(matched_row.get("n_records", 0))
+            postings_for_token = self._sse.decrypt_postings(matched_row["postings_enc"])
+            posting_sets.append({str(posting["patient_id"]): posting for posting in postings_for_token})
+
+        common_ids = set(posting_sets[0])
+        for posting_set in posting_sets[1:]:
+            common_ids &= set(posting_set)
+        postings = [posting_sets[0][patient_id] for patient_id in sorted(common_ids)]
+
+        if "khoa_phong" in filters:
+            dept = str(filters["khoa_phong"])
+            postings = [posting for posting in postings if posting.get("dept") == dept]
+        filtered_records = len(postings)
+        postings = postings[: max(0, int(limit))]
+        return {
+            "keyword": display_keyword if display_keyword != normalized else normalized,
+            "token": exact_token if len(query_tokens) == 1 else None,
+            "tokens": query_tokens,
+            "n_records": len(common_ids),
+            "filtered_records": filtered_records,
+            "volume_leakage": volume_leakage,
+            "postings": postings,
+            "note": "Static SSE encrypted index",
         }
 
     def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:

@@ -130,10 +130,10 @@ if __name__ == "__main__":
 
     # 4. Hybrid: avg với filter (ít records hơn)
     results.append(benchmark(
-        "Hybrid Adaptive: avg_vien_phi (filtered E11)",
+        "Hybrid Adaptive: avg_vien_phi (filtered I01)",
         query_type="avg_vien_phi",
         role="admin",
-        filters={"ma_benh": "E11"}
+        filters={"ma_benh": "I01"}
     ))
 
     # 5. RBAC overhead: researcher (có masking)

@@ -55,6 +55,11 @@ def test_join_and_equality_route_to_software():
     assert r.route("equality").mode == ExecutionMode.SOFTWARE
     assert r.route("=").mode == ExecutionMode.SOFTWARE
 
+def test_keyword_search_routes_to_software():
+    r = QueryRouter()
+    assert r.route("keyword_search").mode == ExecutionMode.SOFTWARE
+    assert r.route("search").mode == ExecutionMode.SOFTWARE
+
 # ── T4: RBAC ─────────────────────────────────────────────────────
 
 def test_admin_can_sum():
@@ -81,6 +86,13 @@ def test_pii_roles_allowed_with_masking():
     assert r.check("researcher", "get_patient").allowed is True
     assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "admin_staff")["cmnd"] == "[MASKED]"
     assert r.mask_pii({"ho_ten": "A", "cmnd": "1", "ngay_sinh": "x", "dia_chi": "y"}, "researcher")["ho_ten"] == "[MASKED]"
+
+def test_keyword_search_roles_allowed():
+    r = RBACMiddleware()
+    assert r.check("admin", "keyword_search").allowed is True
+    assert r.check("doctor", "keyword_search").allowed is True
+    assert r.check("admin_staff", "keyword_search").allowed is True
+    assert r.check("researcher", "keyword_search").allowed is True
 
 def test_invalid_role_denied():
     r = RBACMiddleware()
@@ -128,7 +140,7 @@ def test_fetch_ciphertexts_empty_when_mongo_unavailable():
     from router.software_executor import SoftwareExecutor
     ex = SoftwareExecutor.__new__(SoftwareExecutor)   # không mở kết nối thật
     ex._mongo_available = False
-    assert ex.fetch_vien_phi_ciphertexts({"ma_benh": "E11"}) == []
+    assert ex.fetch_vien_phi_ciphertexts({"ma_benh": "I01"}) == []
     assert ex.mongo_available is False
 
 def test_fetch_patient_pii_requires_mongo():
@@ -139,6 +151,22 @@ def test_fetch_patient_pii_requires_mongo():
         ex.fetch_patient_pii_ciphertext("pid-1")
     with pytest.raises(RuntimeError):
         ex.fetch_patient_pii_ciphertext_by_cmnd("01234567890")
+
+def test_static_sse_token_and_postings_roundtrip():
+    from crypto.crypto.sse import StaticSSECipher, tokenize_text
+    sse = StaticSSECipher(b"a" * 64)
+    assert sse.token("Đái tháo đường") == sse.token("đái   tháo đường")
+    assert sse.token("I01") != sse.token("C01")
+    postings = [{"patient_id": "p1", "dept": "Noi"}]
+    assert sse.decrypt_postings(sse.encrypt_postings(postings)) == postings
+    assert "đái" in tokenize_text("Đái tháo đường I01")
+
+
+def test_demo_disease_codes_are_canonicalized_to_uppercase():
+    from router.software_executor import canonicalize_disease_code
+    assert canonicalize_disease_code("i01") == "I01"
+    assert canonicalize_disease_code(" p02 ") == "P02"
+    assert canonicalize_disease_code("viêm phổi") == "viêm phổi"
 
 # ── T6: Adaptive state machine (tất định, không cần pool) ────────
 

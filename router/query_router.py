@@ -33,6 +33,7 @@ class QueryRouter:
     SOFTWARE_QUERY_TYPES = {
         "count", "equality", "=", "eq",
         "join", "group_by", "group by", "range", "filter",
+        "keyword_search", "search",
     }
 
     def _normalize(self, query_type: str) -> str:
@@ -60,6 +61,12 @@ class QueryRouter:
             )
 
         if q in self.SOFTWARE_QUERY_TYPES:
+            if q in ("keyword_search", "search"):
+                return RouteDecision(
+                    mode=ExecutionMode.SOFTWARE,
+                    reason="SSE keyword search chạy trên encrypted inverted index",
+                    query_type=query_type,
+                )
             return RouteDecision(
                 mode=ExecutionMode.SOFTWARE,
                 reason="Equality/range/join/group-by chạy trên DTE/ORE, Software Mode",

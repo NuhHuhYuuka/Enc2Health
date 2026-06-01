@@ -1,0 +1,54 @@
+{
+  "available": true,
+  "n_keywords": 85,
+  "total_posting_refs": 184217,
+  "volume_entropy": 6.2692,
+  "max_volume": 5040,
+  "top_token_volumes": [
+    [
+      "vUZUt1pKDGryTEMGKqrJCgnfrOfsmlpdxDLtfpDngU4",
+      5040
+    ],
+    [
+      "7TZCdWTCiUnCJVyV5RrAQEhLhlHpA2MFmayixpyWd5k",
+      5024
+    ],
+    [
+      "Wa361oFjyC31j9CtQnm0JN96W1e7VOYEPJ58gj12Xq4",
+      4976
+    ],
+    [
+      "xc5WRIbSgC-jdwa3wNoqfqVNC2By1lVtOF6UCUIfW7A",
+      4976
+    ],
+    [
+      "ibM_VPu-qSE6Mc0lsQbbHlPGSEZaOakxdpu8oZz4CS4",
+      4976
+    ],
+    [
+      "IoVcHfXe9VMgBajR4cszXBDo6vols6LVOM9-B00d05o",
+      4976
+    ],
+    [
+      "LknCkaMQfJSEFqdpfZAbAEf8ud6GM4k2KG0q2yUSbLk",
+      4363
+    ],
+    [
+      "KiKCXiH41CeoSB5bBFNHLSiswebaEw5utcR1tL5z7DI",
+      3489
+    ],
+    [
+      "fI_fA57sA-0UF0hUgBsG5IbQCRrQW9tx1yal6PA_jQE",
+      2638
+    ],
+    [
+      "wSu9kQualyqKQAsnHhHLYobrJzn_LI-iF0mlxNqbrZs",
+      2556
+    ]
+  ],
+  "leakage": {
+    "search_pattern": "deterministic HMAC token repeats for repeated keyword",
+    "volume": "n_records is stored per keyword token",
+    "access_pattern": "matching posting ids are available after Router decrypts postings"
+  }
+}

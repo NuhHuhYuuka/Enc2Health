@@ -50,7 +50,7 @@ except Exception:
 
     class SoftwareExecutor:  # type: ignore[no-redef]
         def __init__(self):
-            diseases = ["E11", "I10", "J18", "K29", "M54", "N18"]
+            diseases = ["P01", "P02", "C01", "C02", "I01", "I02", "N01", "N02", "S01", "S02", "E01", "E02"]
             departments = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
             self._records: list[dict] = []
             for index in range(10000):
@@ -91,13 +91,13 @@ except Exception:
 
 ROUTER_URL = os.environ.get("ROUTER_URL", "http://localhost:8000")
 QUERY_PATTERNS = [
-    {"ma_benh": "E11"},
-    {"ma_benh": "E11"},
-    {"ma_benh": "E11"},
-    {"ma_benh": "I10"},
-    {"ma_benh": "I10"},
-    {"ma_benh": "J18"},
-    {"ma_benh": "K29"},
+    {"ma_benh": "I01"},
+    {"ma_benh": "I01"},
+    {"ma_benh": "I01"},
+    {"ma_benh": "C01"},
+    {"ma_benh": "C01"},
+    {"ma_benh": "P01"},
+    {"ma_benh": "S01"},
     {},
     {},
 ]

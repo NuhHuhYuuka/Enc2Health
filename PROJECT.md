@@ -14,7 +14,7 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 
 | Trụ cột | Người | Chạy độc lập | Tích hợp runtime |
 |---|---|---|---|
-| Tầng mã hóa & KMS (DTE/ORE/GCM/ECC, Vault) | Long | ✅ Done | ✅ Nối vào luồng query thật (Mongo ciphertext + 1 bộ key chung + keypair khoa cho PII) |
+| Tầng mã hóa & KMS (DTE/ORE/GCM/ECC/SSE, Vault) | Long | ✅ Done | ✅ Nối vào luồng query thật (Mongo ciphertext + SSE index + 1 bộ key chung + keypair khoa cho PII) |
 | Query Router + Adaptive Logic | Nam | ✅ Done | ✅ SOFTWARE query thật + cost model số liệu thật + operator mở rộng + đẩy ciphertext sang TEE |
 | TEE Enclave + Observability (Gramine simulation, DuckDB, Prometheus) | Lan | ✅ Done | ✅ Pool giải mã AES-GCM từ ciphertext + DuckDB in-memory; giải mã ECC PII theo khoa; attestation ở chế độ signed simulation |
 
@@ -64,6 +64,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | PII mã hóa bất đối xứng RSA-4096 / ECC P-384, client-side | `crypto/crypto/asym.py` (ECIES P-384 + RSA-4096 OAEP) | ✅ |
 | Private key chỉ giải mã trong Enclave | Pool nhận `pii_enc` → lấy private key theo khoa từ Vault → `ecc_decrypt` trong Pool/TEE → zero-fill biến key sau dùng | ✅ |
 | Lâm sàng (mã bệnh, khoa) — DTE AES-SIV, search trên ciphertext | `crypto/crypto/dte.py` (AES-SIV-256, per-field key) | ✅ |
+| Keyword search — static SSE encrypted inverted index | `crypto/crypto/sse.py` + collection `sse_index` + endpoint `/search` | ✅ HMAC search token + AES-GCM encrypted postings; đo search/volume/access leakage |
 | Range (tuổi, ngày) — ORE/OPE | `crypto/crypto/ore.py` (Boldyreva OPE qua `pyope`) | ✅ |
 | Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ |
 | KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault Transit wrap/unwrap DEK thật) |
@@ -85,6 +86,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **DTE (AES-SIV-256)** — `crypto/crypto/dte.py`: mã hóa tất định, per-field key, associated-data isolation, self-test pass.
 - ✅ **ORE/OPE (Boldyreva)** — `crypto/crypto/ore.py`: range query trên tuổi (0–150) & ngày, bảo toàn thứ tự, self-test pass.
 - ✅ **AES-GCM-256** — `crypto/crypto/gcm.py`: mã hóa viện phí / kết quả XN, `decrypt_float`/`decrypt_json`.
+- ✅ **Static SSE** — `crypto/crypto/sse.py`: HMAC-SHA256 search token + AES-GCM encrypted posting lists; `generate_ehr.py` tạo collection `sse_index`; Router `/search` hỗ trợ keyword/phrase search và role-masking posting IDs.
 - ✅ **Asymmetric** — `crypto/crypto/asym.py`: ECIES P-384 (ECDH+HKDF+AES-GCM) và RSA-4096 OAEP; sinh keypair cho 6 khoa.
 - ✅ **Sinh dữ liệu EHR** — `crypto/data/generate_ehr.py`: 10.000 hồ sơ giả (Faker vi_VN) → MongoDB với cột mã hóa đầy đủ (PII/DTE/ORE/GCM) + index; có demo equality & range query trên ciphertext.
 - ✅ **PII payload ECC** — mỗi record có `pii_enc` (JSON `ho_ten`, `cmnd`, `ngay_sinh`, `dia_chi`) mã hóa bằng ECC P-384 public key của khoa; generator tự phát hiện và tái sinh keypair khoa nếu public/private PEM bị lệch trước khi reseed.
@@ -106,7 +108,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Main service** — `router/main.py`: FastAPI :8000, `/query` `/health` `/adaptive` `/metrics`, tích hợp đủ T1/T2/T4/T6/T9; SOFTWARE mode gọi `software_executor` (đã bỏ placeholder), JWT Bearer bắt buộc.
 - ✅ **PII lookup path** — `get_patient`/`lookup_patient` luôn giữ ở TEE (không bị adaptive hạ xuống Software): Router fetch `pii_enc` + `dept` từ Mongo, kiểm ABAC đúng khoa, gọi Pool `/query/pii`, rồi mask PII theo role.
 - ✅ **Smoke run mTLS local** — `Makefile` (`make smoke-local`), `scripts/smoke_test_local.sh`, `scripts/generate_jwt.py`, `docs/SMOKE_RUN.md`: chạy 1 lệnh dựng cả Pool+Router qua TLS, smoke pass.
-- ✅ **Demo E2E có lời dẫn** — `scripts/demo_e2e.py`: chạy truy vấn "AVG viện phí E11 trên 60 tuổi" trên 10k record mã hóa thật, in từng bước (CSP thấy ciphertext → enclave giải mã → bác sĩ nhận 1 số → researcher bị mask). Dùng làm artifact giải thích + bảo vệ đồ án.
+- ✅ **Demo E2E có lời dẫn** — `scripts/demo_e2e.py`: chạy truy vấn "AVG viện phí I01 trên 60 tuổi" trên 10k record mã hóa thật, in từng bước (CSP thấy ciphertext → enclave giải mã → bác sĩ nhận 1 số → researcher bị mask). Dùng làm artifact giải thích + bảo vệ đồ án.
 - ✅ **Demo Adaptive có lời dẫn** — `scripts/demo_adaptive.py`: mô phỏng đợt dịch → EPC bão hòa → router tự fallback AVG xuống Software → phục hồi (có hysteresis + switch log). Không cần MongoDB/Pool.
 - ✅ **Demo ABAC có lời dẫn** — `scripts/demo_abac.py`: chứng minh dept-scoping trên data thật (bác sĩ Tim_mach chỉ thấy 1700 BN khoa mình vs admin 10000; chống lách filter; admin_staff che chẩn đoán; researcher mask).
 
@@ -133,6 +135,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **q-leakage entropy (T13)** — `tests/leakage.py` → `leakage_results.json`.
 - ✅ **Bipartite Matching Attack (T13)** — `tests/attack_bipartite.py`: rank-linkage evaluation có metric phục hồi (`exact_recovery_rate`, `within_2_years_rate`, `mae`) → `attack_results.json` + `attack_chart.png` (nếu có matplotlib).
 - ✅ **ORE Order-Leakage Attack (T13b)** — `tests/attack_ore.py`: tấn công rò rỉ thứ tự cột `tuoi_enc` (2 kịch bản: chỉ-biết-phân-bố + known-plaintext anchor), so với baseline đoán mò → `attack_ore_results.json`. Self-contained, không cần Mongo.
+- ✅ **Static SSE benchmark/leakage (T13c)** — `tests/benchmark_sse.py` + `tests/leakage_sse.py`: đo latency/QPS cho `/search`, search-pattern leakage, volume leakage (`n_records`) và access-pattern leakage qua posting lists → `sse_benchmark_results.json`, `sse_leakage_results.json`.
 - ✅ **Plot tổng hợp (T14)** — `tests/plot_results.py` → `enc2health_benchmark.png`.
 
 ---
@@ -178,7 +181,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 3. ✅ **Load key vào pool lúc startup** — Pool ưu tiên Vault AppRole để lấy token và đọc DEK; fallback local chỉ bật khi `T8_ALLOW_LOCAL_KEY_FALLBACK=1`. `/health` phản ánh `keys_loaded`.
 4. **Thống nhất ICD-10** trong cả mock lẫn data thật. ✅ `test_e2e.py` đã được viết lại: verify kết quả Router so với truy vấn MongoDB thật (DTE+ORE+GCM), tự `skip` khi stack chưa chạy — không còn hard-code `n_records == 5`.
 
-→ *Định nghĩa "xong": chạy đúng truy vấn mẫu trong kịch bản — "AVG viện phí bệnh nhân E11 trên 60 tuổi" — từ client thật, qua Mongo (DTE+ORE) → Enclave (GCM+DuckDB) → ra 1 con số, CSP chỉ thấy ciphertext.*
+→ *Định nghĩa "xong": chạy đúng truy vấn mẫu trong kịch bản — "AVG viện phí bệnh nhân I01 trên 60 tuổi" — từ client thật, qua Mongo (DTE+ORE) → Enclave (GCM+DuckDB) → ra 1 con số, CSP chỉ thấy ciphertext.*
 
 ### Sprint 2 — Đánh giá an ninh đúng trọng tâm
 5. **Q-leakage đã được tách theo mode**: đo access-pattern leakage (DTE equality histogram, ORE order relations) và output exposure riêng cho TEE masked vs Software-fallback raw. Đây là phần đánh giá an ninh chính.
@@ -258,7 +261,7 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 - `make smoke-local`: local end-to-end mTLS smoke pass với Mongo + Router + Pool ✅
 - `tests/test_adaptive.py`: live adaptive endpoint verified via `/adaptive/simulate` fallback/restore ✅
 - `tests/test_e2e.py` (PII decrypt path): 3/3 PII cases PASSED live — doctor sees PII, researcher masked, wrong-dept 403; Pool loaded private keys from Vault ✅
-- `scripts/demo_e2e.py`: AVG (E11, >60) = 8,541,261 VND ✅
+- `scripts/demo_e2e.py`: AVG (I01, >60) = 8,541,261 VND ✅
 - `scripts/demo_abac.py`: ABAC dept-scoping verified ✅
 - `scripts/demo_adaptive.py`: Adaptive fallback hysteresis behavior verified (80%/60%) ✅
 

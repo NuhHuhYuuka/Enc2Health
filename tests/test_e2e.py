@@ -178,7 +178,7 @@ def test_doctor_sum_blocked_e2e():
 
 def test_count_software_mode_e2e():
     """count → SOFTWARE mode"""
-    filters = {"ma_benh": "E11"}
+    filters = {"ma_benh": "I01"}
     expected_count = _expected_count(filters)
 
     r = httpx.post(
@@ -194,10 +194,60 @@ def test_count_software_mode_e2e():
     assert data["result"]["result"] == pytest.approx(float(expected_count), rel=1e-9)
 
 
+def test_sse_keyword_search_e2e():
+    """keyword search → SOFTWARE mode static SSE encrypted index."""
+    row = _mongo_collection().database["sse_index"].find_one({"n_records": {"$gt": 0}})
+    if not row:
+        pytest.skip("Mongo dataset has no sse_index records; reseed with updated generate_ehr.py")
+
+    r = httpx.post(
+        f"{ROUTER_URL}/search",
+        json={"keyword": "I01", "limit": 5, "role": "admin"},
+        headers=_headers("admin"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["mode"] == "software"
+    assert data["result"]["count"] > 0
+    assert data["result"]["global_volume_leakage"] >= data["result"]["count"]
+    assert data["result"]["token"]
+    assert data["result"]["postings"]
+
+    r_lower = httpx.post(
+        f"{ROUTER_URL}/search",
+        json={"keyword": "i01", "limit": 5, "role": "admin"},
+        headers=_headers("admin"),
+        timeout=30,
+    )
+    assert r_lower.status_code == 200
+    lower_data = r_lower.json()
+    assert lower_data["result"]["keyword"] == "I01"
+    assert lower_data["result"]["count"] == data["result"]["count"]
+
+
+def test_sse_keyword_search_researcher_masks_postings():
+    row = _mongo_collection().database["sse_index"].find_one({"n_records": {"$gt": 0}})
+    if not row:
+        pytest.skip("Mongo dataset has no sse_index records; reseed with updated generate_ehr.py")
+
+    r = httpx.post(
+        f"{ROUTER_URL}/search",
+        json={"keyword": "I01", "limit": 5, "role": "researcher"},
+        headers=_headers("researcher"),
+        timeout=30,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["result"]["count"] > 0
+    assert data["result"]["postings"] == "[MASKED]"
+    assert "postings" in data["masked_fields"]
+
+
 def test_filter_by_ma_benh():
     """filter theo ma_benh → ít records hơn"""
     all_values = _expected_values({})
-    filtered_values = _expected_values({"ma_benh": "E11"})
+    filtered_values = _expected_values({"ma_benh": "I01"})
 
     r_all = httpx.post(
         f"{ROUTER_URL}/query",
@@ -207,14 +257,22 @@ def test_filter_by_ma_benh():
     )
     r_filtered = httpx.post(
         f"{ROUTER_URL}/query",
-        json={"query_type": "avg_vien_phi", "filters": {"ma_benh": "E11"}, "role": "admin"},
+        json={"query_type": "avg_vien_phi", "filters": {"ma_benh": "I01"}, "role": "admin"},
+        headers=_headers("admin"),
+        timeout=30,
+    )
+    r_filtered_lower = httpx.post(
+        f"{ROUTER_URL}/query",
+        json={"query_type": "avg_vien_phi", "filters": {"ma_benh": "i01"}, "role": "admin"},
         headers=_headers("admin"),
         timeout=30,
     )
     assert r_all.status_code == 200
     assert r_filtered.status_code == 200
+    assert r_filtered_lower.status_code == 200
     assert r_all.json()["result"]["n_records"] == len(all_values)
     assert r_filtered.json()["result"]["n_records"] == len(filtered_values)
+    assert r_filtered_lower.json()["result"]["n_records"] == len(filtered_values)
     assert len(filtered_values) < len(all_values)
 
 

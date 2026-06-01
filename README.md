@@ -90,6 +90,7 @@ GROUP BY          COUNT DISTINCT
 |---|---|---|
 | Synthetic rank-linkage | `exact_recovery_rate`, `within_2_years_rate`, `mae` | Mô phỏng ORE bảo toàn thứ tự để đo khả năng phục hồi tuổi từ rank/quantile |
 | Real Mongo leakage profile | `unique_ratio`, `top_ciphertext_frequencies` | Đo mức phân biệt của `tuoi_enc` trên ciphertext thật khi không có plaintext labels |
+| Static SSE leakage | `search_pattern`, `volume`, `access_pattern` | Đo rò rỉ token lặp, số kết quả và posting-list khi tìm kiếm keyword |
 
 > `attack_bipartite.py` là benchmark tái liên kết theo thứ hạng: nhánh synthetic mô phỏng ORE bảo toàn thứ tự để attacker suy diễn tuổi từ rank/quantile; nhánh Mongo thật chỉ báo cáo leakage profile khi không có plaintext age labels.
 
@@ -165,7 +166,7 @@ curl -X POST http://localhost:8000/query \
 # Researcher query AVG → TEE + RBAC mask (kết quả bị ẩn)
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-   -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"E11"},"role":"researcher"}'
+   -d '{"query_type":"avg_vien_phi","filters":{"ma_benh":"I01"},"role":"researcher"}'
 
 # Doctor query COUNT → Software mode
 curl -X POST http://localhost:8000/query \
@@ -204,6 +205,10 @@ python3 tests/leakage.py
 
 # Bipartite Matching Attack — rank-linkage / ORE leakage profile (T13)
 python3 tests/attack_bipartite.py
+
+# Static SSE keyword-search benchmark/leakage (T13-SSE)
+python3 tests/benchmark_sse.py
+python3 tests/leakage_sse.py
 
 # EPC saturation scenario test — live adaptive fallback/restore via simulation (T7)
 python3 tests/test_adaptive.py
@@ -256,6 +261,8 @@ enc2health/
 │   ├── benchmark.py         # T11 — benchmark 3 chế độ (50 runs/mode)
 │   ├── benchmark_concurrent.py  # T12 — concurrent clients 1→5→10→20→50
 │   ├── leakage.py           # T13 — q-leakage entropy analysis
+│   ├── leakage_sse.py       # T13 — static SSE search/volume/access leakage
+│   ├── benchmark_sse.py     # T13 — SSE keyword-search latency/QPS
 │   ├── attack_bipartite.py  # T13 — Rank-linkage attack + real leakage profile
 │   └── plot_results.py      # T14 — vẽ biểu đồ trade-off
 ├── benchmark_results.json   # kết quả benchmark thô (T11)

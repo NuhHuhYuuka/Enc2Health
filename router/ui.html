@@ -59,6 +59,10 @@
   input[type=range]{accent-color:var(--brand)}
   .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);cursor:pointer;user-select:none}
   .bar{height:9px;border-radius:6px;background:#e9eff6;overflow:hidden;margin-top:6px}.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2))}
+  .patient-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .patient-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:10px;background:#f8fbfe}
+  .patient-row b{font-size:13px;overflow-wrap:anywhere}.patient-row small{display:block;color:var(--mut);margin-top:3px}
+  .patient-row button{width:auto;margin:0;padding:7px 10px;font-size:12px}
 </style>
 </head>
 <body>
@@ -73,6 +77,7 @@
   <div class="nav">
     <a class="on" onclick="show('dash',this)">📊 Tổng quan</a>
     <a onclick="show('analytics',this)">🩺 Phân tích lâm sàng</a>
+    <a onclick="show('search',this)">🔎 Tìm bệnh nhân</a>
     <a onclick="show('lookup',this)">🔍 Tra cứu CCCD</a>
     <a onclick="show('sec',this)">🔒 Lớp bảo mật</a>
     <div style="margin-top:18px"></div>
@@ -102,7 +107,7 @@
       <div class="grid cols-3">
         <div class="card kpi"><div class="ic">👥</div><div class="lbl">Bệnh nhân trong phạm vi</div><div class="val" id="kPat">—</div><div class="sub">trên dữ liệu mã hóa</div></div>
         <div class="card kpi"><div class="ic" style="background:#e7f0fe">💳</div><div class="lbl">Viện phí trung bình</div><div class="val" id="kAvg">—</div><div class="sub" id="kAvgSub">VND</div></div>
-        <div class="card kpi"><div class="ic" style="background:#f1ecfd">🧬</div><div class="lbl">BN theo mã E11</div><div class="val" id="kE11">—</div><div class="sub">không phải tổng số bệnh nhân</div></div>
+        <div class="card kpi"><div class="ic" style="background:#f1ecfd">🧬</div><div class="lbl">BN theo mã I01</div><div class="val" id="kI01">—</div><div class="sub">không phải tổng số bệnh nhân</div></div>
       </div>
       <div class="card" style="margin-top:16px">
         <h2 class="sec">Tỉ trọng bệnh nhân theo nhóm tuổi (ORE range)</h2>
@@ -122,7 +127,7 @@
             <option value="count">Thống kê số bệnh nhân (COUNT)</option>
           </select>
           <div class="row">
-            <div><label>Mã bệnh (ICD-10)</label><input id="mabenh" value="" placeholder="bỏ trống = tất cả"></div>
+            <div><label>Mã bệnh</label><input id="mabenh" value="" placeholder="bỏ trống = tất cả"></div>
             <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="" placeholder="bỏ trống = mọi tuổi"></div>
           </div>
           <div class="muted" style="margin-top:10px">COUNT tổng bệnh nhân: để trống mã bệnh và tuổi. Nhập mã bệnh để đếm riêng một nhóm.</div>
@@ -133,6 +138,26 @@
         <div class="card">
           <h2 class="sec">Kết quả</h2>
           <div id="resultBox" class="muted">Chưa có phân tích nào.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SSE SEARCH -->
+    <div id="view-search" class="hide">
+      <h2 class="sec">Tìm bệnh nhân theo mã bệnh hoặc triệu chứng</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <label>Từ khóa tìm kiếm</label>
+          <input id="keywordSearch" value="I01" placeholder="Ví dụ: I01, C01, viêm phổi, tăng huyết áp">
+          <button onclick="searchKeyword()">🔎 Search trên SSE Index</button>
+          <div class="muted" style="margin-top:12px;line-height:1.6">
+            Search dùng token HMAC trên encrypted inverted index. Bác sĩ chỉ nhận bệnh nhân thuộc khoa trong token đăng nhập; nhà nghiên cứu chỉ thấy số lượng, không thấy danh sách bệnh nhân.
+          </div>
+          <div id="keywordExamples" class="muted" style="margin-top:10px;line-height:1.7"></div>
+        </div>
+        <div class="card">
+          <h2 class="sec">Kết quả search</h2>
+          <div id="searchResultBox" class="muted">Nhập mã bệnh hoặc triệu chứng để tìm bệnh nhân.</div>
         </div>
       </div>
     </div>
@@ -193,14 +218,18 @@
 const API = (new URLSearchParams(location.search).get('api') || '').replace(/\/+$/,'');
 let TOKEN=null, ROLE=null, DEPT=null;
 const DISEASE_CODES=[
-  ['E11','Đái tháo đường type 2'],
-  ['I10','Tăng huyết áp nguyên phát'],
-  ['J18','Viêm phổi không rõ tác nhân'],
-  ['K29','Viêm dạ dày'],
-  ['M54','Đau lưng'],
-  ['N18','Bệnh thận mạn'],
-  ['I25','Bệnh tim thiếu máu cục bộ mạn'],
-  ['F32','Trầm cảm'],
+  ['P01','Viêm phổi ở trẻ em'],
+  ['P02','Sốt xuất huyết Dengue trẻ em'],
+  ['C01','Tăng huyết áp vô căn'],
+  ['C02','Bệnh tim thiếu máu cục bộ mạn tính'],
+  ['I01','Đái tháo đường Type 2'],
+  ['I02','Bệnh thận mạn giai đoạn cuối'],
+  ['N01','Giai đoạn trầm cảm nặng'],
+  ['N02','Đau thần kinh tọa / Thoát vị đĩa đệm'],
+  ['S01','Viêm ruột thừa cấp'],
+  ['S02','Sỏi túi mật'],
+  ['E01','Đa chấn thương do tai nạn'],
+  ['E02','Ngộ độc thực phẩm cấp tính'],
 ];
 const DEPT_LABELS={
   Tim_mach:'Tim mạch',
@@ -211,13 +240,23 @@ const DEPT_LABELS={
   Nhi:'Nhi',
 };
 
-function show(v,el){ for(const id of ['dash','analytics','lookup','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
+function show(v,el){ for(const id of ['dash','analytics','search','lookup','sec']) document.getElementById('view-'+id).classList.toggle('hide', id!==v);
   if(el){document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on')); el.classList.add('on');} }
 function syncDept(){ document.getElementById('deptWrap').style.display = document.getElementById('role').value==='doctor'?'block':'none'; }
-function setDiseaseCode(code){ document.getElementById('mabenh').value=code; }
+function normalizeDiseaseCode(value){
+  const text = String(value || '').trim();
+  return /^[A-Za-z]\d{2}$/.test(text) ? text.toUpperCase() : text;
+}
+function setDiseaseCode(code){ document.getElementById('mabenh').value=normalizeDiseaseCode(code); }
 function renderDiseaseCodes(){
   document.getElementById('diseaseCodes').innerHTML='Mã bệnh mẫu: '+DISEASE_CODES.map(([code,name])=>`<button type="button" class="ghost" style="width:auto;margin:2px 4px 2px 0;padding:5px 8px;font-size:12px" onclick="setDiseaseCode('${code}')" title="${name}">${code}</button>`).join('');
 }
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function renderKeywordExamples(){
+  const samples=['I01','C01','P01','viêm phổi','tăng huyết áp','sỏi túi mật','ngộ độc'];
+  document.getElementById('keywordExamples').innerHTML='Từ khóa mẫu: '+samples.map(k=>`<button type="button" class="ghost" style="width:auto;margin:2px 4px 2px 0;padding:5px 8px;font-size:12px" onclick="setKeyword('${escapeHtml(k)}')">${escapeHtml(k)}</button>`).join('');
+}
+function setKeyword(keyword){document.getElementById('keywordSearch').value=normalizeDiseaseCode(keyword); searchKeyword();}
 
 async function login(){
   ROLE=document.getElementById('role').value;
@@ -237,14 +276,42 @@ async function call(qtype,filters){
     body:JSON.stringify({query_type:qtype,filters,role:ROLE})});
   return {status:r.status, data: r.ok? await r.json():null};
 }
+async function callPatientById(patientId){
+  const r=await fetch(API+'/query',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body:JSON.stringify({query_type:'get_patient',patient_id:patientId,filters:{},role:ROLE})});
+  return {status:r.status, data: r.ok? await r.json():null};
+}
+async function callSearch(keyword,limit){
+  const r=await fetch(API+'/search',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body:JSON.stringify({keyword,limit,role:ROLE})});
+  return {status:r.status, data: r.ok? await r.json():null};
+}
 function fmt(v){return (v==='[MASKED]')?'🔒 Đã ẩn':(typeof v==='number'?v.toLocaleString('vi-VN'):v);}
+
+function renderPatientDetails(data, targetId){
+  const box = document.getElementById(targetId);
+  const p = data.result || {};
+  const pii = p.pii || {};
+  const badge = data.mode === 'tee' ? '<span class="badge b-tee">🔒 TEE · Enclave Decrypted</span>' : '<span class="badge b-soft">Software Mode</span>';
+  box.innerHTML = `
+    <div style="margin-bottom: 12px;">${badge}</div>
+    <div class="kv"><span>Mã định danh (Patient ID)</span><b>${escapeHtml(p.patient_id || '—')}</b></div>
+    <div class="kv"><span>Họ và tên</span><b>${escapeHtml(fmt(pii.ho_ten))}</b></div>
+    <div class="kv"><span>Số CCCD (CMND)</span><b>${escapeHtml(fmt(pii.cmnd))}</b></div>
+    <div class="kv"><span>Ngày sinh</span><b>${escapeHtml(fmt(pii.ngay_sinh))}</b></div>
+    <div class="kv stack"><span>Địa chỉ</span><b>${escapeHtml(fmt(pii.dia_chi))}</b></div>
+    <div class="kv"><span>Khoa điều trị</span><b>${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')}</b></div>
+    <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')})</b></div>
+    <div class="kv"><span>Độ trễ truy vấn</span><b>${escapeHtml(data.total_latency_ms)} ms</b></div>
+  `;
+}
 
 async function loadDashboard(){
   const pat=await call('count',{}); document.getElementById('kPat').textContent = pat.data? fmt(pat.data.result.result):'—';
   const avg=await call('avg_vien_phi',{});
   if(avg.status===403){document.getElementById('kAvg').textContent='—';document.getElementById('kAvgSub').textContent='không có quyền';}
   else if(avg.data){const v=avg.data.result.result; document.getElementById('kAvg').textContent=(v==='[MASKED]')?'🔒':Math.round(v).toLocaleString('vi-VN');}
-  const e11=await call('count',{ma_benh:'E11'}); document.getElementById('kE11').textContent = e11.data? fmt(e11.data.result.result):'—';
+  const i01=await call('count',{ma_benh:'I01'}); document.getElementById('kI01').textContent = i01.data? fmt(i01.data.result.result):'—';
   drawAges();
 }
 async function drawAges(){
@@ -280,20 +347,64 @@ async function searchPatient() {
     return;
   }
   
-  const p = data.result || {};
-  const pii = p.pii || {};
-  const badge = data.mode === 'tee' ? '<span class="badge b-tee">🔒 TEE · Enclave Decrypted</span>' : '<span class="badge b-soft">Software Mode</span>';
-  
+  renderPatientDetails(data,'lookupResultBox');
+  updateSec(data);
+}
+
+async function viewPatientFromSearch(patientId) {
+  const box = document.getElementById('searchResultBox');
+  box.innerHTML = '<span class="muted">Đang giải mã PII bằng TEE...</span>';
+  const {status, data} = await callPatientById(patientId);
+  if(status===403){
+    box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">ABAC chặn vì bệnh nhân không thuộc khoa của bác sĩ hoặc vai trò không đủ quyền.</p>';
+    return;
+  }
+  if(status===404){
+    box.innerHTML='<span class="badge b-403">Không tìm thấy</span><p class="muted">Không tìm thấy bệnh nhân này trong cơ sở dữ liệu.</p>';
+    return;
+  }
+  if(!data){
+    box.innerHTML=`<span class="badge b-403">Lỗi hệ thống</span><p class="muted">HTTP Status ${status}</p>`;
+    return;
+  }
+  renderPatientDetails(data,'searchResultBox');
+  updateSec(data);
+}
+
+async function searchKeyword() {
+  if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
+  const keywordInput = document.getElementById('keywordSearch');
+  const keyword = normalizeDiseaseCode(keywordInput.value);
+  keywordInput.value = keyword;
+  if(!keyword){alert('Vui lòng nhập mã bệnh hoặc triệu chứng.');return;}
+  const box = document.getElementById('searchResultBox');
+  box.innerHTML = '<span class="muted">Đang search encrypted SSE index...</span>';
+  const {status, data} = await callSearch(keyword, 20);
+  if(status===403){
+    box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">Đã ẩn: vai trò hiện tại không được phép search hoặc không đủ quyền xem kết quả.</p>';
+    return;
+  }
+  if(!data){
+    box.innerHTML=`<span class="badge b-403">Lỗi hệ thống</span><p class="muted">HTTP Status ${status}</p>`;
+    return;
+  }
+  const result = data.result || {};
+  const postings = Array.isArray(result.postings) ? result.postings : [];
+  const scope = data.abac_scope && data.abac_scope.khoa_phong ? ` · Khoa ${(DEPT_LABELS[data.abac_scope.khoa_phong]||data.abac_scope.khoa_phong)}` : '';
+  const rows = postings.map(p => `
+    <div class="patient-row">
+      <div><b>${escapeHtml(p.patient_id)}</b><small>${escapeHtml(DEPT_LABELS[p.dept] || p.dept || '—')}</small></div>
+      <button class="ghost" onclick="viewPatientFromSearch('${escapeHtml(p.patient_id)}')">Xem</button>
+    </div>
+  `).join('');
+  const hidden = result.postings === '[MASKED]';
   box.innerHTML = `
-    <div style="margin-bottom: 12px;">${badge}</div>
-    <div class="kv"><span>Mã định danh (Patient ID)</span><b>${p.patient_id || '—'}</b></div>
-    <div class="kv"><span>Họ và tên</span><b>${fmt(pii.ho_ten)}</b></div>
-    <div class="kv"><span>Số CCCD (CMND)</span><b>${fmt(pii.cmnd)}</b></div>
-    <div class="kv"><span>Ngày sinh</span><b>${fmt(pii.ngay_sinh)}</b></div>
-    <div class="kv stack"><span>Địa chỉ</span><b>${fmt(pii.dia_chi)}</b></div>
-    <div class="kv"><span>Khoa điều trị</span><b>${DEPT_LABELS[p.dept] || p.dept || '—'}</b></div>
-    <div class="kv"><span>Trạng thái ABAC</span><b>Khoa trùng khớp (${DEPT_LABELS[p.dept] || p.dept})</b></div>
-    <div class="kv"><span>Độ trễ truy vấn</span><b>${data.total_latency_ms} ms</b></div>
+    <div><span class="badge b-soft">SSE · Software</span></div>
+    <div class="kv"><span>Từ khóa</span><b>${escapeHtml(result.keyword || keyword)}</b></div>
+    <div class="kv"><span>Số bệnh nhân khớp${escapeHtml(scope)}</span><b>${Number(result.count||0).toLocaleString('vi-VN')}</b></div>
+    <div class="kv"><span>Volume leakage toàn cục</span><b>${Number(result.global_volume_leakage||0).toLocaleString('vi-VN')}</b></div>
+    <div class="kv"><span>Token SSE</span><b>${escapeHtml(result.token || '(phrase search: nhiều token)')}</b></div>
+    ${hidden ? '<p class="muted">🔒 Đã ẩn: danh sách bệnh nhân bị ẩn theo RBAC; vai trò này chỉ thấy số lượng.</p>' : (rows ? `<div class="patient-list">${rows}</div>` : '<p class="muted">Không có bệnh nhân phù hợp trong phạm vi quyền hiện tại.</p>')}
   `;
   updateSec(data);
 }
@@ -301,11 +412,11 @@ async function searchPatient() {
 function renderSampleCmnds() {
   const samples = [
     {name: 'An Vũ (Khoa Nhi)', cmnd: '03321819600'},
-    {name: 'Thành Vũ (Khoa Nội)', cmnd: '02351161559'},
-    {name: 'An Phạm (Khoa Tim mạch)', cmnd: '04131647525'},
-    {name: 'Ánh Nguyễn (Khoa Cấp cứu)', cmnd: '03056413953'},
-    {name: 'An Vũ (Khoa Thần kinh)', cmnd: '08281489325'},
-    {name: 'Nhật Bùi (Khoa Ngoại)', cmnd: '09367632016'}
+    {name: 'Quang Đức Nguyễn (Khoa Nội)', cmnd: '07816184959'},
+    {name: 'Cô Ngọc Phạm (Khoa Tim mạch)', cmnd: '04131647525'},
+    {name: 'Nam Lê (Khoa Cấp cứu)', cmnd: '06542351161'},
+    {name: 'Trung Đức Trần (Khoa Thần kinh)', cmnd: '09283276483'},
+    {name: 'Lâm Phạm (Khoa Ngoại)', cmnd: '08908386379'}
   ];
   document.getElementById('sampleCmnds').innerHTML = samples.map(s => 
     `<button type="button" class="ghost" style="width:auto;margin:2px;padding:6px 10px;font-size:12px;" onclick="setSearchCmnd('${s.cmnd}')" title="${s.name}">${s.name}: ${s.cmnd}</button>`
@@ -320,11 +431,13 @@ function setSearchCmnd(cmnd) {
 async function runQuery(){
   if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
   const qtype=document.getElementById('qtype').value, filters={};
-  const mb=document.getElementById('mabenh').value.trim(), tm=document.getElementById('tuoimin').value.trim();
+  const diseaseInput=document.getElementById('mabenh');
+  const mb=normalizeDiseaseCode(diseaseInput.value), tm=document.getElementById('tuoimin').value.trim();
+  diseaseInput.value=mb;
   if(mb)filters.ma_benh=mb; if(tm)filters.tuoi_min_enc=parseInt(tm);
   const box=document.getElementById('resultBox'); box.innerHTML='<span class="muted">Đang xử lý…</span>';
   const {status,data}=await call(qtype,filters);
-  if(status===403){box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">Vai trò này bị từ chối truy vấn (RBAC).</p>';updateSec(null);return;}
+  if(status===403){box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">Đã ẩn: vai trò này bị từ chối truy vấn hoặc không đủ quyền xem kết quả.</p>';updateSec(null);return;}
   if(!data){box.innerHTML='<p class="muted">Lỗi '+status+'</p>';return;}
   const mode=data.mode, fell=mode!==data.requested_mode, res=data.result||{}, val=res.result;
   const badge=mode==='tee'?'<span class="badge b-tee">🔒 TEE · Enclave</span>':(fell?'<span class="badge b-fall">⚠️ Fallback · Software</span>':'<span class="badge b-soft">Software</span>');
@@ -354,7 +467,7 @@ async function simulate(v){
   document.getElementById('adaptiveBox').innerHTML=`Trạng thái: ${badge} &nbsp;<span class="muted">ngưỡng fallback ${d.epc_threshold*100}% · phục hồi ${d.restore_threshold*100}%</span>`;
 }
 
-syncDept(); renderDiseaseCodes(); renderSampleCmnds(); login(); simulate(0);
+syncDept(); renderDiseaseCodes(); renderKeywordExamples(); renderSampleCmnds(); login(); simulate(0);
 </script>
 </body>
 </html>

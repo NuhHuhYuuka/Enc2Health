@@ -66,7 +66,7 @@ def get_dte_cipher(field_name: str) -> DTECipher:
 
 
 def encrypt_ma_benh(ma_benh: str) -> str:
-    """Mã hóa mã bệnh ICD-10 (ví dụ: 'E11')."""
+    """Mã hóa mã bệnh demo (ví dụ: 'I01')."""
     return get_dte_cipher("ma_benh").encrypt(ma_benh, b"field:ma_benh")
 
 def decrypt_ma_benh(ct: str) -> str:
@@ -85,31 +85,31 @@ if __name__ == "__main__":
     cipher = DTECipher()
 
     # Test tính tất định
-    ct1 = cipher.encrypt("E11")
-    ct2 = cipher.encrypt("E11")
+    ct1 = cipher.encrypt("I01")
+    ct2 = cipher.encrypt("I01")
     assert ct1 == ct2, "DTE phải cho cùng ciphertext!"
-    print(f"  Deterministic: OK | 'E11' → {ct1[:20]}...")
+    print(f"  Deterministic: OK | 'I01' → {ct1[:20]}...")
 
     # Test decrypt
-    assert cipher.decrypt(ct1) == "E11"
+    assert cipher.decrypt(ct1) == "I01"
     print(f"  Decrypt: OK")
 
     # Test equality search simulation
-    search_ct = cipher.encrypt("E11")
+    search_ct = cipher.encrypt("I01")
     # MongoDB query: { "ma_benh": search_ct } → trả về đúng hồ sơ
     assert search_ct == ct1
     print(f"  Equality search simulation: OK")
 
-    # Test AD isolation: E11 với AD khác nhau → kết quả khác
-    ct_khoa = cipher.encrypt("E11", b"field:khoa_phong")
+    # Test AD isolation: I01 với AD khác nhau → kết quả khác
+    ct_khoa = cipher.encrypt("I01", b"field:khoa_phong")
     assert ct_khoa != ct1
     print(f"  Associated data isolation: OK")
 
     print("\n=== Test field-specific ciphers ===")
-    enc_benh = encrypt_ma_benh("E11")
+    enc_benh = encrypt_ma_benh("I01")
     enc_khoa = encrypt_khoa_phong("Noi")
-    print(f"  ma_benh('E11'): {enc_benh[:20]}...")
+    print(f"  ma_benh('I01'): {enc_benh[:20]}...")
     print(f"  khoa_phong('Noi'): {enc_khoa[:20]}...")
-    assert decrypt_ma_benh(enc_benh) == "E11"
+    assert decrypt_ma_benh(enc_benh) == "I01"
     assert decrypt_khoa_phong(enc_khoa) == "Noi"
     print("  All OK!")

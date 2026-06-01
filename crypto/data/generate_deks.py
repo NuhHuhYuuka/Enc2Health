@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from crypto.dte import DTECipher
 from crypto.ore import ORECipher
 from crypto.gcm import AESGCMCipher
+from crypto.sse import StaticSSECipher
 
 KEY_DIR = Path(__file__).resolve().parent / "keys"
 
@@ -30,6 +31,7 @@ def main():
         (DTECipher, "dte_cmnd.key"),
         (ORECipher, "ore.key"),
         (AESGCMCipher, "gcm_dek.key"),
+        (StaticSSECipher, "sse.key"),
     ]
     created = sum(_ensure(cls, name) for cls, name in specs)
     print(f"DEKs in {KEY_DIR}: {created} tạo mới, {len(specs) - created} giữ nguyên (đã có)")

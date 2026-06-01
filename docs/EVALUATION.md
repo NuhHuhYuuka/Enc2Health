@@ -50,7 +50,7 @@ Ghi chú vận hành:
 | SOFTWARE — `count` (trên ciphertext) | 3.9 ms | 6.3 ms | 259 |
 | TEE — `sum_vien_phi` (toàn bộ 10k) | 70.5 ms | 79 ms | 14.2 |
 | TEE — `avg_vien_phi` (toàn bộ 10k) | 71.7 ms | 94 ms | 13.9 |
-| **Hybrid Adaptive** — `avg` (lọc E11 trước) | **26.3 ms** | 34.8 ms | 38.0 |
+| **Hybrid Adaptive** — `avg` (lọc I01 trước) | **26.3 ms** | 34.8 ms | 38.0 |
 
 **Diễn giải trung thực:** Software (chỉ thao tác trên ciphertext, không giải mã) rất nhanh. TEE đắt hơn vì **phải giải mã từng bản ghi + DuckDB** — đây là *cái giá của bảo mật*, không phải overhead vô ích. **Hybrid** giảm chi phí TEE ~2.7× bằng cách dùng DTE/ORE lọc bớt bản ghi *trước* khi đẩy vào enclave (70 ms → 26 ms). Đây chính là giá trị của kiến trúc lai.
 

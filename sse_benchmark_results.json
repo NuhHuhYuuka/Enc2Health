@@ -1,0 +1,38 @@
+[
+  {
+    "keyword": "E11",
+    "runs": 30,
+    "avg_ms": 3.495,
+    "p95_ms": 4.648,
+    "p99_ms": 5.276,
+    "qps": 286.15,
+    "count": 1268
+  },
+  {
+    "keyword": "tăng huyết áp",
+    "runs": 30,
+    "avg_ms": 6.942,
+    "p95_ms": 17.662,
+    "p99_ms": 30.861,
+    "qps": 144.04,
+    "count": 1303
+  },
+  {
+    "keyword": "glucose",
+    "runs": 30,
+    "avg_ms": 4.887,
+    "p95_ms": 5.386,
+    "p99_ms": 5.434,
+    "qps": 204.63,
+    "count": 2556
+  },
+  {
+    "keyword": "viện phí",
+    "runs": 30,
+    "avg_ms": 6.866,
+    "p95_ms": 7.373,
+    "p99_ms": 7.426,
+    "qps": 145.64,
+    "count": 2468
+  }
+]

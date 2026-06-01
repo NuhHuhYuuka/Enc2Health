@@ -50,6 +50,13 @@ class QueryRequest(BaseModel):
     patient_id: Optional[str] = None
     role: str = "doctor"
 
+
+class SearchRequest(BaseModel):
+    keyword: str
+    filters: Dict = Field(default_factory=dict)
+    limit: int = 20
+    role: str = "doctor"
+
 @app.post("/query")
 async def handle_query(req: QueryRequest, request: Request):
     t0 = time.perf_counter()
@@ -147,6 +154,59 @@ async def handle_query(req: QueryRequest, request: Request):
     if ciphertext_count is not None:
         response["ciphertext_pushed"] = ciphertext_count
     return response
+
+
+@app.post("/search")
+async def handle_search(req: SearchRequest, request: Request):
+    """Static SSE keyword search over encrypted clinical index."""
+    t0 = time.perf_counter()
+    auth_hdr = request.headers.get("authorization")
+    if not auth_hdr:
+        raise HTTPException(status_code=401, detail="missing Authorization header")
+    claims = validate_jwt_bearer(auth_hdr)
+    role = claims.get("role", req.role)
+    subject = Subject(role=role, dept=claims.get("dept"))
+
+    access = abac.evaluate(subject, "keyword_search")
+    if not access.allowed:
+        raise HTTPException(status_code=403, detail=access.reason)
+    eff_filters = {**req.filters, **access.scope_filters}
+    decision = router.route("keyword_search", eff_filters)
+
+    try:
+        search_result = software_executor.keyword_search(req.keyword, eff_filters, limit=req.limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    visible_postings = role in {"admin", "doctor"}
+    response_result = {
+        "keyword": search_result["keyword"],
+        "count": search_result.get("filtered_records", search_result.get("n_records", 0)),
+        "global_volume_leakage": search_result.get("volume_leakage", 0),
+        "token": search_result.get("token"),
+        "note": search_result.get("note"),
+    }
+    if visible_postings:
+        response_result["postings"] = search_result.get("postings", [])
+    else:
+        response_result["postings"] = "[MASKED]"
+
+    return {
+        "mode": decision.mode.value,
+        "requested_mode": decision.mode.value,
+        "reason": decision.reason,
+        "result": response_result,
+        "total_latency_ms": round((time.perf_counter() - t0) * 1000, 3),
+        "masked_fields": access.masked_fields + ([] if visible_postings else ["postings"]),
+        "abac_scope": access.scope_filters,
+        "leakage": {
+            "search_pattern": "same keyword yields same HMAC token",
+            "volume": "n_records is visible in the SSE index",
+            "access_pattern": "posting ids are decrypted by Router and may be role-masked",
+        },
+    }
 
 @app.get("/health")
 async def health():

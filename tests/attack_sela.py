@@ -51,34 +51,34 @@ KEY_PATH = REPO_ROOT / "crypto" / "data" / "keys" / "dte_ma_benh.key"
 
 # Project ICD-10 set from crypto/data/generate_ehr.py plus J45 from the prompt.
 ICD10_LABELS = {
-    "E11": "Dai thao duong type 2",
-    "I10": "Tang huyet ap nguyen phat",
-    "J18": "Viem phoi khong ro tac nhan",
-    "K29": "Viem da day",
-    "M54": "Dau lung",
-    "N18": "Benh than man",
-    "I25": "Benh tim thieu mau cuc bo man",
-    "F32": "Tram cam",
-    "J45": "Hen phe quan",
+    "P01": "Viem phoi o tre em",
+    "P02": "Sot xuat huyet Dengue tre em",
+    "C01": "Tang huyet ap vo can",
+    "C02": "Benh tim thieu mau cuc bo man tinh",
+    "I01": "Dai thao duong Type 2",
+    "I02": "Benh than man giai doan cuoi",
+    "N01": "Giai doan tram cam nang",
+    "N02": "Dau than kinh toa Thoat vi dia dem",
+    "S01": "Viem ruot thua cap",
+    "S02": "Soi tui mat",
+    "E01": "Da chan thuong do tai nan",
+    "E02": "Ngo doc thuc pham cap tinh",
 }
 
 # Auxiliary distribution rho. These values are intentionally external to the
 # generated dataset and encode an attacker's imperfect population prior.
 AUX_DISTRIBUTION = {
-    "I10": 0.20,
-    "E11": 0.15,
-    "M54": 0.13,
-    "K29": 0.12,
-    "J18": 0.10,
-    "I25": 0.09,
-    "J45": 0.08,
-    "F32": 0.07,
-    "N18": 0.06,
+    "I01": 0.10, "I02": 0.08,
+    "C01": 0.10, "C02": 0.08,
+    "P01": 0.10, "P02": 0.08,
+    "N01": 0.08, "N02": 0.08,
+    "S01": 0.08, "S02": 0.07,
+    "E01": 0.08, "E02": 0.07,
 }
 
 # Same disease set as the current EHR generator. Synthetic fallback samples
 # uniformly because generate_ehr.py uses random.choice over ICD10_CODES.
-GENERATOR_CODES = ["E11", "I10", "J18", "K29", "M54", "N18", "I25", "F32"]
+GENERATOR_CODES = ["P01", "P02", "C01", "C02", "I01", "I02", "N01", "N02", "S01", "S02", "E01", "E02"]
 
 
 @dataclass(frozen=True)

@@ -13,12 +13,14 @@ from crypto.asym import ecc_encrypt
 from crypto.dte  import DTECipher
 from crypto.ore  import ORECipher
 from crypto.gcm  import AESGCMCipher
+from crypto.sse  import StaticSSECipher, tokenize_text
 from pymongo import MongoClient
 
 # ── Cấu hình ──────────────────────────────────────────────────────────────
 MONGO_URI    = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME      = os.getenv("MONGO_DB", "enc2health")
 COLLECTION   = os.getenv("MONGO_COLLECTION", "patient_records")
+SSE_COLLECTION = os.getenv("SSE_COLLECTION", "sse_index")
 RECORD_COUNT = int(os.getenv("EHR_RECORD_COUNT", "10000"))
 BATCH_SIZE   = int(os.getenv("EHR_BATCH_SIZE", "500"))
 FORCE_RECREATE = os.getenv("EHR_FORCE_RECREATE", "0") == "1"
@@ -30,19 +32,38 @@ Faker.seed(DATASET_SEED)
 fake = Faker("vi_VN")
 fake.seed_instance(DATASET_SEED)
 
-# ICD-10 mã bệnh phổ biến
-ICD10_CODES = {
-    "E11": "Đái tháo đường type 2",
-    "I10": "Tăng huyết áp nguyên phát",
-    "J18": "Viêm phổi không rõ tác nhân",
-    "K29": "Viêm dạ dày",
-    "M54": "Đau lưng",
-    "N18": "Bệnh thận mạn",
-    "I25": "Bệnh tim thiếu máu cục bộ mạn",
-    "F32": "Trầm cảm",
-}
-
 DEPARTMENTS = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
+DEPARTMENT_DISEASES = {
+    "Nhi": {
+        "P01": "Viêm phổi ở trẻ em",
+        "P02": "Sốt xuất huyết Dengue trẻ em",
+    },
+    "Tim_mach": {
+        "C01": "Tăng huyết áp vô căn",
+        "C02": "Bệnh tim thiếu máu cục bộ mạn tính",
+    },
+    "Noi": {
+        "I01": "Đái tháo đường Type 2",
+        "I02": "Bệnh thận mạn giai đoạn cuối",
+    },
+    "Than_kinh": {
+        "N01": "Giai đoạn trầm cảm nặng",
+        "N02": "Đau thần kinh tọa / Thoát vị đĩa đệm",
+    },
+    "Ngoai": {
+        "S01": "Viêm ruột thừa cấp",
+        "S02": "Sỏi túi mật",
+    },
+    "Cap_cuu": {
+        "E01": "Đa chấn thương do tai nạn",
+        "E02": "Ngộ độc thực phẩm cấp tính",
+    },
+}
+DISEASE_CODES = {
+    code: name
+    for diseases in DEPARTMENT_DISEASES.values()
+    for code, name in diseases.items()
+}
 STREET_NAMES = [
     "Nguyễn Trãi", "Lê Lợi", "Trần Hưng Đạo", "Hai Bà Trưng",
     "Điện Biên Phủ", "Nguyễn Huệ", "Phan Đình Phùng", "Lý Thường Kiệt",
@@ -58,6 +79,12 @@ DISTRICT_NAMES = [
 CITY_NAMES = [
     "TP. Hồ Chí Minh", "TP. Hà Nội", "TP. Đà Nẵng",
     "TP. Cần Thơ", "TP. Hải Phòng",
+]
+CLINICAL_NOTE_TEMPLATES = [
+    "Bệnh nhân được theo dõi {diagnosis}, cần kiểm tra định kỳ tại khoa {dept}.",
+    "Hồ sơ ghi nhận tiền sử {diagnosis}, chỉ định xét nghiệm glucose và creatinine.",
+    "Tái khám sau điều trị {diagnosis}, đánh giá đáp ứng thuốc và viện phí.",
+    "Theo dõi nguy cơ biến chứng liên quan {diagnosis} tại khoa {dept}.",
 ]
 
 def random_date(start_year=2020, end_year=2024) -> date:
@@ -150,6 +177,7 @@ def main():
     ore = _load_required_cipher(ORECipher, key_dir / "ore.key")
     # AES-GCM: DEK cho lab results & billing
     gcm = _load_required_cipher(AESGCMCipher, key_dir / "gcm_dek.key")
+    sse = _load_required_cipher(StaticSSECipher, key_dir / "sse.key")
 
     # NOTE: Do NOT write raw cipher keys or DEKs to disk. Store them into Vault or use envelope encryption.
     print("  Loaded existing keys. Missing keys will fail unless EHR_ALLOW_KEY_CREATE=1.")
@@ -158,6 +186,7 @@ def main():
     client = MongoClient(MONGO_URI)
     db     = client[DB_NAME]
     col    = db[COLLECTION]
+    sse_col = db[SSE_COLLECTION]
 
     if col.estimated_document_count() > 0 and not FORCE_RECREATE:
         print(f"  Collection already has {col.estimated_document_count():,} documents; skipping reseed")
@@ -165,21 +194,28 @@ def main():
         return
 
     col.drop()  # Reset nếu chạy lại
+    sse_col.drop()
 
     print(f"[4/5] Sinh và insert {RECORD_COUNT:,} hồ sơ...")
     print(f"  Dataset seed: {DATASET_SEED}")
     batch_size = BATCH_SIZE
     batch = []
+    sse_index: dict[str, list[dict[str, str]]] = {}
 
     for i in range(RECORD_COUNT):
         dept    = random.choice(DEPARTMENTS)
         pub_pem = dept_keypairs[dept]["public_pem"].encode()
-        ma_benh = random.choice(list(ICD10_CODES.keys()))
-        tuoi    = random.randint(1, 95)
+        dept_diseases = DEPARTMENT_DISEASES[dept]
+        ma_benh = random.choice(list(dept_diseases.keys()))
+        tuoi = random.randint(1, 15) if dept == "Nhi" else random.randint(16, 95)
         ngay_nhap = random_date()
         ngay_sinh = birth_date_from_age(ngay_nhap, tuoi)
         vien_phi  = round(random.uniform(500_000, 50_000_000), 0)  # VND
-        chan_doan = random.choice(list(ICD10_CODES.values()))
+        chan_doan = dept_diseases[ma_benh]
+        clinical_note = random.choice(CLINICAL_NOTE_TEMPLATES).format(
+            diagnosis=chan_doan,
+            dept=dept.replace("_", " "),
+        )
         ket_qua_xn = {
             "glucose": round(random.uniform(3.5, 15.0), 1),   # mmol/L
             "hba1c":   round(random.uniform(4.0, 12.0), 1),   # %
@@ -196,9 +232,23 @@ def main():
             "dia_chi": dia_chi,
         }
 
+        patient_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"enc2health:{DATASET_SEED}:{i}"))
+
+        keyword_source = " ".join(
+            [
+                ma_benh,
+                chan_doan,
+                clinical_note,
+                dept.replace("_", " "),
+            ]
+        )
+        for keyword in tokenize_text(keyword_source):
+            token = sse.token(keyword)
+            sse_index.setdefault(token, []).append({"patient_id": patient_id, "dept": dept})
+
         doc = {
             # Plaintext fields
-            "patient_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"enc2health:{DATASET_SEED}:{i}")),
+            "patient_id": patient_id,
             "record_index": i,
             "dataset_seed": DATASET_SEED,
             "khoa_phong_plaintext": dept,  # Chỉ để debug, xóa trong production
@@ -224,6 +274,7 @@ def main():
             "chan_doan_enc":     gcm.encrypt(chan_doan),
             "ket_qua_xn_enc": gcm.encrypt(ket_qua_xn),
             "vien_phi_enc":   gcm.encrypt(str(vien_phi)),
+            "clinical_note_enc": gcm.encrypt(clinical_note),
 
             # Metadata (plaintext ok)
             "created_at": ngay_nhap.isoformat(),
@@ -240,6 +291,24 @@ def main():
 
     print(f"\n  Done! Total: {col.count_documents({}):,} documents")
 
+    print("[4b/5] Tạo SSE encrypted inverted index...")
+    sse_docs = []
+    for token, postings in sse_index.items():
+        sse_docs.append(
+            {
+                "token": token,
+                "postings_enc": sse.encrypt_postings(postings),
+                "n_records": len(postings),  # volume leakage intentionally visible for evaluation
+                "dataset_seed": DATASET_SEED,
+            }
+        )
+        if len(sse_docs) >= batch_size:
+            sse_col.insert_many(sse_docs)
+            sse_docs = []
+    if sse_docs:
+        sse_col.insert_many(sse_docs)
+    print(f"  SSE keywords: {sse_col.count_documents({}):,}")
+
     print("[5/5] Tạo MongoDB indexes...")
     # Index trên DTE fields (equality search)
     col.create_index("ma_benh_enc")
@@ -250,6 +319,7 @@ def main():
     col.create_index("ngay_sinh_enc")
     col.create_index("ngay_nhap_vien_enc")
     col.create_index("dept")
+    sse_col.create_index("token", unique=True)
     print("  Indexes created: ma_benh_enc, khoa_phong_enc, tuoi_enc, ngay_nhap_vien_enc")
     print("  Verified indexes:")
     for index_info in col.list_indexes():
@@ -260,10 +330,10 @@ def main():
     print(f"   Records: {RECORD_COUNT:,}")
 
     # Demo query để verify
-    print("\n[Demo] Equality search: ma_benh = 'E11'")
-    e11_ct = dte_ma_benh.encrypt("E11", b"field:ma_benh")
-    count_e11 = col.count_documents({"ma_benh_enc": e11_ct})
-    print(f"  Tìm thấy {count_e11} bệnh nhân Tiểu đường (E11)")
+    print("\n[Demo] Equality search: ma_benh = 'I01'")
+    i01_ct = dte_ma_benh.encrypt("I01", b"field:ma_benh")
+    count_i01 = col.count_documents({"ma_benh_enc": i01_ct})
+    print(f"  Tìm thấy {count_i01} bệnh nhân Đái tháo đường Type 2 (I01)")
 
     print("\n[Demo] Range query: tuoi > 60")
     threshold = ore.encrypt_age(60)
