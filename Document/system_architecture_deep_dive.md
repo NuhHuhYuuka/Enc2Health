@@ -1,6 +1,63 @@
 # Hướng Dẫn Kiến Trúc & Vận Hành Hệ Thống Enc²Health
 ## (Tài liệu chi tiết từ cơ bản đến nâng cao dành cho nghiên cứu và báo cáo)
 
+```mermaid
+graph TB
+    %% Nodes
+    Client["Trình duyệt / Client App<br>(doctor / admin / admin_staff / researcher)"]
+    
+    subgraph Host ["Query Router Host (:8000)"]
+        Router["Query Router (FastAPI)"]
+        Auth["Auth Validator (HS256 JWT)"]
+        ABAC["ABAC & RBAC Engine (rbac.py / abac.py)"]
+        DecMode["Decision Engine (query_router.py)"]
+        CostModel["Cost Model (cost_model.py)"]
+        Adaptive["Adaptive Controller (adaptive.py)"]
+        SoftExec["Software Executor (software_executor.py)"]
+        LocalKeys["Local Key Fallback (gcm_dek, dte_khoa)"]
+    end
+    
+    subgraph DB ["Database Server (:27017)"]
+        Mongo[("MongoDB Database<br>(Collection: patient_records)")]
+        SSEIndex[("SSE Inverted Index<br>(Collection: sse_index)")]
+    end
+    
+    subgraph TEE ["SGX Enclave Task Pool (:9091)"]
+        Pool["Enclave Pool (FastAPI)"]
+        Decrypt["AES-GCM & ECC Decrypt Engine"]
+        DuckDB[("DuckDB In-Memory DB")]
+    end
+
+    subgraph KMS ["Key Management Service (:8200)"]
+        Vault[("HashiCorp Vault")]
+    end
+
+    %% Flows
+    Client -- "1. POST /query /search (JWT)" --> Router
+    Router --> Auth --> ABAC --> DecMode
+    DecMode --> CostModel
+    DecMode --> Adaptive
+    
+    %% Software Path
+    Adaptive -- "Software Path / Fallback" --> SoftExec
+    SoftExec -- "Queries ciphertext" --> Mongo
+    SoftExec -- "Queries symptom token" --> SSEIndex
+    SoftExec -- "Loads key (RAM exposure)" --> LocalKeys
+    
+    %% TEE Path
+    Adaptive -- "TEE Path" --> Pool
+    Pool -- "Attestation HMAC & mTLS" --> Router
+    Pool -- "Retrieve private/DEK keys" --> Vault
+    Pool --> Decrypt
+    Decrypt --> DuckDB
+    
+    %% Database content details
+    Mongo -.-> PII["pii_enc (ECIES ECC P-384)"]
+    Mongo -.-> DTE["ma_benh_enc (AES-SIV-256)"]
+    Mongo -.-> ORE["tuoi_enc (OPE)"]
+    Mongo -.-> GCM["vien_phi_enc (AES-GCM-256)"]
+```
+
 Chào mừng bạn đến với tài liệu phân tích sâu hệ thống **Enc²Health**. Tài liệu này được thiết kế để giải thích hệ thống từ những khái niệm cốt lõi nhất (dành cho người mới tiếp cận) đến các cơ chế vận hành phức tạp của mã nguồn (dành cho kỹ sư và nhà phát triển).
 
 ---
