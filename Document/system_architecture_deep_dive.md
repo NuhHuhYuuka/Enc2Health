@@ -97,32 +97,48 @@ Nếu ta mã hóa dữ liệu theo cách thông thường (như mã hóa đĩa A
  └── Triệu chứng lâm sàng ─────────────> Chỉ mục tìm kiếm ngược SSE ────────> sse_index (HMAC + GCM)
 ```
 
+
 ### 2.1. Mã hóa bất đối xứng ECC ECIES P-384 (Dành cho PII nhạy cảm)
 * **Ý tưởng**: Giống như hòm thư. Ai cũng có thể nhét thư vào qua khe hở (dùng Public Key của khoa để mã hóa), nhưng chỉ người giữ chìa khóa hòm thư (Private Key nằm trong Enclave) mới mở ra đọc được.
-* **Cách dùng**: Mã hóa trường `pii_enc` chứa thông tin định danh cá nhân (Họ tên, CCCD, Ngày sinh, Địa chỉ, Bóm tắt bệnh án, Phác đồ điều trị). 
+* **Cách dùng**: Mã hóa trường `pii_enc` chứa thông tin định danh cá nhân (Họ tên, CCCD, Ngày sinh, Địa chỉ, Tóm tắt bệnh án, Phác đồ điều trị). 
+* **Lý do lựa chọn**:
+  - **Bảo mật bất đối xứng**: Cho phép phía client (hoặc kịch bản gieo dữ liệu) tự động mã hóa thông tin PII bằng khóa công khai mà không cần biết khóa giải mã (đáp ứng nguyên tắc tối thiểu quyền hạn).
+  - **Lựa chọn ECC thay vì RSA**: ECC P-384 cung cấp mức độ bảo mật tương đương khóa RSA 7680-bit nhưng với kích thước khóa nhỏ hơn nhiều lần. Điều này giúp giảm thiểu đáng kể chi phí truyền tải mạng, dung lượng bản mã lưu trữ trên MongoDB, và tối ưu hóa tốc độ tính toán giải mã bên trong môi trường tài nguyên hạn chế của TEE Enclave (SGX).
 * **Tệp tin**: `crypto/crypto/asym.py`.
 
 ### 2.2. Mã hóa tất định DTE - AES-SIV-256 (Dành cho tìm kiếm bằng)
 * **Ý tưởng**: Nếu từ gốc là "I01" thì bản mã lúc nào cũng là "xyz123". Do bản mã giống nhau nên ta có thể tìm kiếm chính xác (`=`) trực tiếp trên bản mã.
 * **Cách dùng**: Mã hóa trường mã bệnh (`ma_benh_enc`), khoa phòng (`khoa_phong_enc`), số CCCD tra cứu nhanh (`cmnd_dte`).
+* **Lý do lựa chọn**:
+  - **Tính năng**: Để chạy truy vấn tìm kiếm bằng (`find_one` theo CCCD, lọc chính xác theo mã bệnh) trực tiếp trên cơ sở dữ liệu đám mây mà Cloud không cần giải mã dữ liệu.
+  - **Lựa chọn AES-SIV (RFC 5297)**: So với mã hóa tất định thông thường (dùng chế độ AES-ECB hoặc AES-CBC với IV cố định - vốn cực kỳ rò rỉ và dễ bị tấn công), AES-SIV (Synthetic Initialization Vector) là giải pháp hàng đầu cung cấp tính năng **Misuse-Resistant Authenticated Encryption (MRAE)**. Dù khóa bị lạm dụng hoặc IV bị trùng lắp, nó không bao giờ rò rỉ bất kỳ thông tin nào khác ngoài mối quan hệ bằng nhau (equality relation).
 * **Tệp tin**: `crypto/crypto/dte.py`.
 
 ### 2.3. Mã hóa bảo toàn thứ tự OPE/ORE (Dành cho lọc khoảng)
 * **Ý tưởng**: Nếu tuổi 30 nhỏ hơn tuổi 40, thì bản mã của tuổi 30 cũng nhỏ hơn bản mã của tuổi 40 (`OPE(30) < OPE(40)`).
 * **Cách dùng**: Mã hóa số tuổi (`tuoi_enc`) và ngày nhập viện. MongoDB có thể chạy các câu lệnh tìm kiếm khoảng tuổi dạng `{"tuoi_enc": {"$gte": OPE(60)}}` trực tiếp mà không cần giải mã.
+* **Lý do lựa chọn**:
+  - **Hiệu năng lọc**: Yêu cầu y tế thường xuyên lọc nhóm tuổi hoặc khoảng thời gian nhập viện. Nếu dùng mã hóa ngẫu nhiên, ta buộc phải tải toàn bộ 10.000 bản ghi về client/enclave rồi giải mã để lọc (rất nghẽn băng thông).
+  - **Tính tương thích**: Boldyreva OPE cho phép cơ sở dữ liệu MongoDB xây dựng các chỉ mục cây B-Tree trực tiếp trên ciphertext để thực hiện quét khoảng với độ phức tạp $O(\log N)$ cực kỳ nhanh chóng.
 * **Tệp tin**: `crypto/crypto/ore.py`.
 
 ### 2.4. Mã hóa đối xứng ngẫu nhiên AES-GCM-256 (Dành cho tính toán số liệu)
 * **Ý tưởng**: Đây là mã hóa tiêu chuẩn bảo mật cực cao. Cùng một số tiền viện phí `10.000.000` VND của 2 bệnh nhân khác nhau sẽ cho ra 2 bản mã hoàn toàn khác nhau nhờ vector khởi tạo (IV) ngẫu nhiên. Kẻ tấn công nhìn vào không thể biết ai đóng nhiều tiền hơn ai.
 * **Cách dùng**: Mã hóa trường viện phí (`vien_phi_enc`) và kết quả xét nghiệm y khoa.
+* **Lý do lựa chọn**:
+  - **Bảo mật tuyệt đối**: Dữ liệu tài chính/viện phí nhạy cảm không được phép rò rỉ tần suất hay thứ tự cho Cloud.
+  - **Lựa chọn AES-GCM (AEAD)**: Cung cấp tính năng xác thực dữ liệu liên kết (**Authenticated Encryption**). Giúp phát hiện ngay lập tức nếu kẻ tấn công hoặc Cloud admin sửa đổi trái phép dữ liệu bản mã (chống giả mạo số liệu viện phí). Đồng thời, thuật toán này được tăng tốc trực tiếp bằng phần cứng thông qua tập lệnh **AES-NI** của CPU, đem lại hiệu năng giải mã cực nhanh khi xử lý luồng (stream) hàng loạt trong Enclave.
 * **Tệp tin**: `crypto/crypto/gcm.py`.
 
 ### 2.5. Chỉ mục tìm kiếm mã hóa SSE (Dành cho tìm kiếm từ khóa lâm sàng)
 * **Ý tưởng**: Tạo một bảng mục lục riêng (`sse_index`). Khi bệnh nhân nhập viện, các từ khóa triệu chứng (ví dụ: "ho", "sốt") được băm thành một token HMAC: `token = HMAC(K_token, "ho")`. Bản ghi chỉ mục sẽ lưu token này ánh xạ tới danh sách Patient ID đã được mã hóa bằng AES-GCM.
 * **Cách dùng**: Cho phép tìm kiếm bệnh nhân theo triệu chứng hoặc chẩn đoán bằng từ khóa lâm sàng mà không để lộ từ khóa cho MongoDB.
+* **Lý do lựa chọn**:
+  - **Tìm kiếm đa từ khóa lâm sàng**: Hồ sơ bệnh án thường có mô tả dài chứa nhiều từ khóa. Mã hóa DTE hay OPE không hỗ trợ tìm kiếm từng từ khóa trong một câu dài.
+  - **Lựa chọn SSE tĩnh (Inverted Index)**: Đây là mô hình kinh điển giúp tối ưu tốc độ tìm kiếm văn bản có cấu trúc với chi phí bộ nhớ tối thiểu. Bằng cách lưu postings đã mã hóa bằng AES-GCM, ta chỉ tiết lộ rò rỉ ở mức đo lường được (search pattern, volume leakage) mà không làm lộ từ khóa tìm kiếm hay ID bệnh nhân trực tiếp cho Cloud DB.
 * **Tệp tin**: `crypto/crypto/sse.py`.
-
 ---
+
 
 # PHẦN 3: CHI TIẾT TỪNG NÚT VÀ CƠ CHẾ VẬN HÀNH
 
