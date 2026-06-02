@@ -250,6 +250,38 @@ async def metrics():
     return adaptive.get_status()
 
 
+@app.get("/nodes")
+async def nodes_status():
+    """Trạng thái LIVE của từng node (cho demo phân tán — Router probe qua mạng).
+
+    Router (máy Nam) tự kiểm: Pool (máy Lan qua ECALL_POOL_URL), MongoDB (máy Long
+    qua MONGO_URI), Vault (máy Long qua VAULT_ADDR) → cho thấy các node ở các MÁY
+    khác nhau có liên lạc được không.
+    """
+    pool_ok = ecall.health_check()
+    try:
+        mongo_ok = software_executor._detect_mongo_available()
+    except Exception:
+        mongo_ok = False
+    vault_ok = False
+    try:
+        import httpx
+        vault_addr = os.environ.get("VAULT_ADDR", "http://127.0.0.1:8200").rstrip("/")
+        httpx.get(vault_addr + "/v1/sys/health", timeout=1.5)
+        vault_ok = True  # bất kỳ phản hồi nào = Vault reachable (kể cả sealed)
+    except Exception:
+        vault_ok = False
+    return {
+        "nodes": [
+            {"id": "client",  "label": "Client (EMR / Bác sĩ)",        "owner": "—",    "status": "ok"},
+            {"id": "router",  "label": "Query Router (Middleware)",    "owner": "Nam",  "port": 8000,  "status": "ok"},
+            {"id": "mongo",   "label": "MongoDB (Cloud · ciphertext)", "owner": "Long", "port": 27017, "status": "ok" if mongo_ok else "down"},
+            {"id": "enclave", "label": "ECALL Pool / Enclave (TEE)",   "owner": "Lan",  "port": 9091,  "status": "ok" if pool_ok else "down"},
+            {"id": "vault",   "label": "HashiCorp Vault (KMS)",        "owner": "Long", "port": 8200,  "status": "ok" if vault_ok else "down"},
+        ]
+    }
+
+
 # ── UI demo (chỉ bật khi ENC2HEALTH_DEV_UI=1) ───────────────────────────────
 @app.get("/ui", response_class=HTMLResponse)
 async def ui_page():
