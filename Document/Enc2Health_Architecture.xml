@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" compressed="false">
+  <diagram id="DIAGRAM_ID" name="Enc2Health Architecture">
+    <mxGraphModel dx="1221" dy="758" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-86" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;startSize=23;" value="1. Client Environment" vertex="1">
+          <mxGeometry height="120" width="960" x="917.6000162760417" y="724.9333683894231" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-87" parent="VWbdB6SDr8iMNDuyg4H0-86" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" value="Client Application&#xa;(doctor/admin/staff/researcher)" vertex="1">
+          <mxGeometry height="60" width="200" x="730" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-88" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;startSize=23;" value="2. Middleware / Query Router Layer" vertex="1">
+          <mxGeometry height="380" width="680" x="1197.6000162760417" y="894.9333683894231" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-89" parent="VWbdB6SDr8iMNDuyg4H0-88" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d79b00;strokeColor=#bd7000;fontColor=#ffffff;fontStyle=1;" value="Tiered Query Router" vertex="1">
+          <mxGeometry height="80" width="160" x="240" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-90" parent="VWbdB6SDr8iMNDuyg4H0-88" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" value="Software Mode Executor:&#xa;DTE / ORE / SSE" vertex="1">
+          <mxGeometry height="60" width="160" x="240" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-91" parent="VWbdB6SDr8iMNDuyg4H0-88" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" value="Probing Task Monitor" vertex="1">
+          <mxGeometry height="60" width="140" x="490" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-92" parent="VWbdB6SDr8iMNDuyg4H0-88" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" value="Cost Model Engine" vertex="1">
+          <mxGeometry height="60" width="140" x="490" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-93" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;startSize=23;" value="3. Cloud-Native DBMS (MongoDB)" vertex="1">
+          <mxGeometry height="160" width="340" x="1360.6000162760417" y="1328.933349609375" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-94" parent="VWbdB6SDr8iMNDuyg4H0-93" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="Encrypted Database:&#xa;MongoDB (FLE)" vertex="1">
+          <mxGeometry height="100" width="130" x="20" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-95" parent="VWbdB6SDr8iMNDuyg4H0-93" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="SSE Inverted Index:&#xa;(sse_index)" vertex="1">
+          <mxGeometry height="100" width="130" x="170" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-96" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;startSize=23;" value="4. TEE - Intel SGX2 Enclave (Gramine)" vertex="1">
+          <mxGeometry height="220" width="230" x="917.6000162760417" y="1054.933368389423" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-97" parent="VWbdB6SDr8iMNDuyg4H0-96" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" value="Gramine LibOS" vertex="1">
+          <mxGeometry height="50" width="160" x="35" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-98" parent="VWbdB6SDr8iMNDuyg4H0-96" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" value="DuckDB Analytics Engine" vertex="1">
+          <mxGeometry height="90" width="105" x="62.5" y="115.07" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-99" parent="1" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;startSize=23;" value="5. Security &amp; KMS" vertex="1">
+          <mxGeometry height="140" width="230" x="917.6000162760417" y="1344.933368389423" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-100" parent="VWbdB6SDr8iMNDuyg4H0-99" style="shape=ext;double=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" value="HashiCorp Vault&#xa;(KMS / Keys)" vertex="1">
+          <mxGeometry height="75" width="160" x="35" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-101" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-87" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#000000;strokeWidth=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-89" value="1. HTTP Request (JWT)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-102" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-89" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#000000;strokeWidth=1;exitX=0.75;exitY=0;entryX=0.5;entryY=1;" target="VWbdB6SDr8iMNDuyg4H0-87" value="Results (Decrypted &amp; Masked)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-103" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-89" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#d79b00;strokeWidth=1;dashed=1;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-91" value="2. Check Latency">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-104" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-91" style="endArrow=classic;html=1;strokeColor=#d79b00;strokeWidth=1;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-92" value="3. EPC Saturation Metrics">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-105" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-92" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#d79b00;strokeWidth=1;dashed=1;exitX=0;exitY=0.5;entryX=0.5;entryY=1;" target="VWbdB6SDr8iMNDuyg4H0-89" value="4. Decision (Soft vs TEE)">
+          <mxGeometry relative="1" x="0.2469" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1637.6000162760417" y="1184.933368389423" />
+              <mxPoint x="1637.6000162760417" y="1029.933368389423" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-106" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-89" style="endArrow=classic;html=1;strokeColor=#82b366;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-90" value="5a. Fallback / Simple Query">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-107" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-89" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#9673a6;strokeWidth=1.5;exitX=0;exitY=0.5;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-97" value="5b. Complex Aggregation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-108" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=1;entryX=0.536;entryY=0.02;entryDx=0;entryDy=0;entryPerimeter=0;" target="VWbdB6SDr8iMNDuyg4H0-94" value="Fetch / Filter">
+          <mxGeometry relative="1" x="0.3242" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1451" y="1255" />
+              <mxPoint x="1450" y="1255" />
+            </Array>
+            <mxPoint x="1450.6000162760417" y="1144.933349609375" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-109" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=1;" value="Encrypted Results">
+          <mxGeometry relative="1" x="0.3242" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1490.6000162760417" y="1363.933349609375" />
+              <mxPoint x="1490.6000162760417" y="1363.933349609375" />
+            </Array>
+            <mxPoint x="1490.6000162760417" y="1368.933349609375" as="sourcePoint" />
+            <mxPoint x="1490.6000162760417" y="1144.933349609375" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-110" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-98" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#9673a6;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="VWbdB6SDr8iMNDuyg4H0-94" value="Fetch Encrypted Data">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-111" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-97" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#666666;strokeWidth=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" target="VWbdB6SDr8iMNDuyg4H0-100" value="Remote Attestation &amp; Key Unwrap">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="892.6000162760417" y="1118.933349609375" />
+              <mxPoint x="892.6000162760417" y="1422.933349609375" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-112" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-97" style="endArrow=classic;html=1;strokeColor=#9673a6;strokeWidth=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="VWbdB6SDr8iMNDuyg4H0-98">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-113" edge="1" parent="1" source="VWbdB6SDr8iMNDuyg4H0-90" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=1;exitX=0.988;exitY=0.939;exitDx=0;exitDy=0;exitPerimeter=0;" target="VWbdB6SDr8iMNDuyg4H0-95" value="Query Symptom Token">
+          <mxGeometry relative="1" x="0.4721" y="24" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="VWbdB6SDr8iMNDuyg4H0-114" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" target="VWbdB6SDr8iMNDuyg4H0-90" value="Return Postings">
+          <mxGeometry relative="1" x="0.6051" y="17" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1557.6000162760417" y="1368.933349609375" />
+              <mxPoint x="1557.6000162760417" y="1368.933349609375" />
+            </Array>
+            <mxPoint x="1557.6000162760417" y="1358.933349609375" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

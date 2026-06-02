@@ -58,6 +58,17 @@ graph TB
     Mongo -.-> GCM["vien_phi_enc (AES-GCM-256)"]
 ```
 
+### 💡 Sơ đồ thiết kế Draw.io gốc (Có thể chỉnh sửa)
+Bên cạnh sơ đồ Mermaid trực quan trên, bạn có thể tải và chỉnh sửa trực tiếp sơ đồ kiến trúc hệ thống chuẩn chuyên nghiệp qua Draw.io (đã được cập nhật khớp với cấu hình hệ thống Enc²Health hiện tại: MongoDB FLE, HTTP JWT Request, Decrypted/Masked Results, v.v.):
+* **File thiết kế Draw.io:** [enc2health_architecture.xml](file:///home/beserk/crypto/repo/Enc2Health/Document/enc2health_architecture.xml)
+
+**Cách sử dụng:**
+1. Truy cập trang web trực tuyến: [draw.io (diagrams.net)](https://app.diagrams.net/).
+2. Chọn **Open Existing Diagram** (Mở biểu đồ hiện có) và chọn tệp `enc2health_architecture.xml` này.
+3. Bạn có thể chỉnh sửa thiết kế hoặc xuất sơ đồ dưới dạng ảnh chất lượng cao (PNG, SVG, PDF) để chèn vào báo cáo.
+
+---
+
 Chào mừng bạn đến với tài liệu phân tích sâu hệ thống **Enc²Health**. Tài liệu này được thiết kế để giải thích hệ thống từ những khái niệm cốt lõi nhất (dành cho người mới tiếp cận) đến các cơ chế vận hành phức tạp của mã nguồn (dành cho kỹ sư và nhà phát triển).
 
 ---
