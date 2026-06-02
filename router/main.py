@@ -109,19 +109,29 @@ async def handle_query(req: QueryRequest, request: Request):
         if result is None:
             raise HTTPException(status_code=503, detail="ECALL pool không khả dụng")
         pii_plaintext = result.get("pii", result)
+
+        if role in {"admin", "doctor"}:
+            result_ket_qua_xn = pii_ciphertext.get("ket_qua_xn")
+            result_clinical_note = pii_ciphertext.get("clinical_note")
+        else:
+            result_ket_qua_xn = "[MASKED]"
+            result_clinical_note = "[MASKED]"
+
         result = {
             "patient_id": pii_ciphertext["patient_id"],
             "dept": pii_ciphertext["dept"],
             "pii": abac.mask_pii(pii_plaintext, role),
             "ma_benh": pii_ciphertext.get("ma_benh"),
             "chan_doan": pii_ciphertext.get("chan_doan"),
+            "ket_qua_xn": result_ket_qua_xn,
+            "clinical_note": result_clinical_note,
             "query_type": normalized_query_type,
             "n_records": 1,
         }
     elif actual_mode == ExecutionMode.TEE:
         ciphertexts = None
         if TEE_PUSH_CIPHERTEXT:
-            ciphertexts = software_executor.fetch_vien_phi_ciphertexts(eff_filters)
+            ciphertexts = software_executor.fetch_ciphertexts(req.query_type, eff_filters)
             ciphertext_count = len(ciphertexts)
         result = ecall.query(req.query_type, eff_filters, role, ciphertexts=ciphertexts)
         if result is None:

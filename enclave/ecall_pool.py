@@ -216,6 +216,22 @@ def _build_mongo_filter(filters: Dict[str, object]) -> Dict[str, object]:
     if "tuoi_max_enc" in filters and _ore_cipher is not None:
         query.setdefault("tuoi_enc", {})["$lte"] = _ore_cipher.encrypt_age(int(filters["tuoi_max_enc"]))
 
+    if "ngay_nhap_vien_min_enc" in filters and _ore_cipher is not None:
+        from datetime import date
+        try:
+            d = date.fromisoformat(str(filters["ngay_nhap_vien_min_enc"]))
+            query["ngay_nhap_vien_enc"] = {"$gte": _ore_cipher.encrypt_date(d)}
+        except Exception:
+            pass
+
+    if "ngay_nhap_vien_max_enc" in filters and _ore_cipher is not None:
+        from datetime import date
+        try:
+            d = date.fromisoformat(str(filters["ngay_nhap_vien_max_enc"]))
+            query.setdefault("ngay_nhap_vien_enc", {})["$lte"] = _ore_cipher.encrypt_date(d)
+        except Exception:
+            pass
+
     dept = filters.get("khoa_phong") or filters.get("khoa")
     if dept is not None and _dte_khoa_cipher is not None:
         query["khoa_phong_enc"] = _dte_khoa_cipher.encrypt(str(dept), b"field:khoa_phong")
@@ -228,7 +244,8 @@ def _query_mongo_aggregate(req) -> Dict:
         raise RuntimeError("Mongo ciphertext path is not initialized")
 
     mongo_filter = _build_mongo_filter(req.filters)
-    projection = {"vien_phi_enc": 1, "_id": 0}
+    col_name = "ket_qua_xn_enc" if ("glucose" in req.query_type or "creatinine" in req.query_type) else "vien_phi_enc"
+    projection = {col_name: 1, "_id": 0}
 
     if req.query_type == "count":
         n_records = _mongo_collection.count_documents(mongo_filter)
@@ -242,14 +259,24 @@ def _query_mongo_aggregate(req) -> Dict:
     docs = _mongo_collection.find(mongo_filter, projection)
     values: List[float] = []
     for doc in docs:
-        ct = doc.get("vien_phi_enc")
+        ct = doc.get(col_name)
         if ct:
-            values.append(enclave_service.decrypt_aes_gcm(ct))
+            if "glucose" in req.query_type or "creatinine" in req.query_type:
+                try:
+                    data = enclave_service.decrypt_aes_gcm_json(ct)
+                    if isinstance(data, dict):
+                        val_key = "glucose" if "glucose" in req.query_type else "creatinine"
+                        if val_key in data:
+                            values.append(float(data[val_key]))
+                except Exception as exc:
+                    print(f"[T8 Pool] decrypt error for a lab ciphertext: {exc}")
+            else:
+                values.append(enclave_service.decrypt_aes_gcm(ct))
 
     n_records = len(values)
     if not values:
         result = 0.0
-    elif req.query_type == "avg_vien_phi":
+    elif req.query_type in ("avg_vien_phi", "avg_glucose", "avg_creatinine"):
         result = sum(values) / n_records
     elif req.query_type == "sum_vien_phi":
         result = sum(values)
@@ -265,6 +292,7 @@ def _query_mongo_aggregate(req) -> Dict:
 
 def _build_mock_patient_data(n_records: int, payload_bytes: int) -> List[dict]:
     """Build a configurable in-memory EHR table for simulation benchmarks."""
+    from datetime import date
     diseases = ["E11", "I10", "J18", "K29", "M54", "N18"]
     departments = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
     payload = "x" * max(0, payload_bytes)
@@ -281,6 +309,9 @@ def _build_mock_patient_data(n_records: int, payload_bytes: int) -> List[dict]:
                 "vien_phi": float(900 + (index % 9100)),
                 "khoa": departments[index % len(departments)],
                 "payload": payload,
+                "glucose": 4.0 + (index % 10) * 0.8,
+                "creatinine": 60.0 + (index % 200),
+                "ngay_nhap": date(2020 + (index % 5), 1 + (index % 12), 1 + (index % 28)),
             }
         )
 
@@ -343,6 +374,22 @@ def _query_mock_aggregate(query_type: str, filters: Dict[str, object]) -> Dict[s
         max_age = int(filters["tuoi_max_enc"])
         records = [record for record in records if int(record["tuoi"]) <= max_age]
 
+    if "ngay_nhap_vien_min_enc" in filters:
+        from datetime import date
+        try:
+            min_d = date.fromisoformat(str(filters["ngay_nhap_vien_min_enc"]))
+            records = [r for r in records if r.get("ngay_nhap", date(2020, 1, 1)) >= min_d]
+        except Exception:
+            pass
+
+    if "ngay_nhap_vien_max_enc" in filters:
+        from datetime import date
+        try:
+            max_d = date.fromisoformat(str(filters["ngay_nhap_vien_max_enc"]))
+            records = [r for r in records if r.get("ngay_nhap", date(2024, 12, 31)) <= max_d]
+        except Exception:
+            pass
+
     n_records = len(records)
     if query_type == "count":
         result = float(n_records)
@@ -350,6 +397,10 @@ def _query_mock_aggregate(query_type: str, filters: Dict[str, object]) -> Dict[s
         result = sum(float(record["vien_phi"]) for record in records) / n_records if records else 0.0
     elif query_type == "sum_vien_phi":
         result = sum(float(record["vien_phi"]) for record in records)
+    elif query_type == "avg_glucose":
+        result = sum(float(record.get("glucose", 0.0)) for record in records) / n_records if records else 0.0
+    elif query_type == "avg_creatinine":
+        result = sum(float(record.get("creatinine", 0.0)) for record in records) / n_records if records else 0.0
     else:
         raise ValueError(f"Unknown query type: {query_type}")
 
@@ -492,25 +543,32 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
             values: List[float] = []
             for ct in req.ciphertexts:
                 try:
-                    v = enclave_service.decrypt_aes_gcm(ct)
-                    values.append(float(v))
+                    if "glucose" in req.query_type or "creatinine" in req.query_type:
+                        data = enclave_service.decrypt_aes_gcm_json(ct)
+                        if isinstance(data, dict):
+                            val_key = "glucose" if "glucose" in req.query_type else "creatinine"
+                            if val_key in data:
+                                values.append(float(data[val_key]))
+                    else:
+                        v = enclave_service.decrypt_aes_gcm(ct)
+                        values.append(float(v))
                 except Exception as exc:
                     print(f"[T8 Pool] decrypt error for a ciphertext: {exc}")
 
             n_records = len(values)
             if duckdb is not None:
                 conn = duckdb.connect(database=":memory:")
-                conn.execute("CREATE TABLE IF NOT EXISTS patient_values(vien_phi DOUBLE)")
+                conn.execute("CREATE TABLE IF NOT EXISTS patient_values(val DOUBLE)")
                 if values:
                     conn.executemany("INSERT INTO patient_values VALUES(?)", [(v,) for v in values])
                 if req.query_type == "count":
                     row = conn.execute("SELECT COUNT(*) FROM patient_values").fetchone()
                     result = float(row[0] if row and row[0] is not None else 0.0)
-                elif req.query_type == "avg_vien_phi":
-                    row = conn.execute("SELECT AVG(vien_phi) FROM patient_values").fetchone()
+                elif req.query_type in ("avg_vien_phi", "avg_glucose", "avg_creatinine"):
+                    row = conn.execute("SELECT AVG(val) FROM patient_values").fetchone()
                     result = float(row[0] if row and row[0] is not None else 0.0)
                 elif req.query_type == "sum_vien_phi":
-                    row = conn.execute("SELECT SUM(vien_phi) FROM patient_values").fetchone()
+                    row = conn.execute("SELECT SUM(val) FROM patient_values").fetchone()
                     result = float(row[0] if row and row[0] is not None else 0.0)
                 else:
                     raise ValueError(f"Unknown query type: {req.query_type}")
@@ -521,7 +579,7 @@ def _execute_medical_query(req: QueryRequest) -> Dict:
                     result = 0.0
                 elif req.query_type == "count":
                     result = float(len(values))
-                elif req.query_type == "avg_vien_phi":
+                elif req.query_type in ("avg_vien_phi", "avg_glucose", "avg_creatinine"):
                     result = sum(values) / n_records
                 elif req.query_type == "sum_vien_phi":
                     result = sum(values)

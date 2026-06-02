@@ -8,20 +8,20 @@ from typing import Optional
 # ── Role definitions ─────────────────────────────────────────────
 ROLE_PERMISSIONS = {
     "admin": {
-        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count", "get_patient", "lookup_patient", "keyword_search"},
+        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "avg_glucose", "avg_creatinine", "count", "get_patient", "lookup_patient", "keyword_search"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,
         "pii_access": "full",
     },
     "doctor": {
-        "allowed_query_types": {"avg_vien_phi", "count", "get_patient", "lookup_patient", "keyword_search"},
+        "allowed_query_types": {"avg_vien_phi", "avg_glucose", "avg_creatinine", "count", "get_patient", "lookup_patient", "keyword_search"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,
         "pii_access": "full",
     },
     # Nhân viên hành chính: xem được mọi thông tin cũ, trừ 2 thông tin mới
     "admin_staff": {
-        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "count", "get_patient", "lookup_patient", "keyword_search"},
+        "allowed_query_types": {"sum_vien_phi", "avg_vien_phi", "avg_glucose", "avg_creatinine", "count", "get_patient", "lookup_patient", "keyword_search"},
         "can_see_vien_phi": True,
         "can_see_ma_benh": True,    # cho phép xem mã bệnh
         "pii_access": "full",       # cho phép xem PII đầy đủ

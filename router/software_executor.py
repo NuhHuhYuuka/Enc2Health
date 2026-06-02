@@ -117,9 +117,26 @@ class SoftwareExecutor:
         if "tuoi_max_enc" in filters and self._ore is not None:
             query.setdefault("tuoi_enc", {})["$lte"] = self._ore.encrypt_age(int(filters["tuoi_max_enc"]))
 
+        if "ngay_nhap_vien_min_enc" in filters and self._ore is not None:
+            from datetime import date
+            try:
+                d = date.fromisoformat(str(filters["ngay_nhap_vien_min_enc"]))
+                query["ngay_nhap_vien_enc"] = {"$gte": self._ore.encrypt_date(d)}
+            except Exception:
+                pass
+
+        if "ngay_nhap_vien_max_enc" in filters and self._ore is not None:
+            from datetime import date
+            try:
+                d = date.fromisoformat(str(filters["ngay_nhap_vien_max_enc"]))
+                query.setdefault("ngay_nhap_vien_enc", {})["$lte"] = self._ore.encrypt_date(d)
+            except Exception:
+                pass
+
         return query
 
     def _build_fallback_records(self, n_records: int) -> list[dict[str, Any]]:
+        from datetime import date
         diseases_by_dept = {
             "Noi": ["I01", "I02"],
             "Ngoai": ["S01", "S02"],
@@ -138,6 +155,9 @@ class SoftwareExecutor:
                     "tuoi": 1 + (index % 15) if dept == "Nhi" else 16 + (index % 80),
                     "khoa": dept,
                     "vien_phi": float(900 + (index % 9100)),
+                    "ngay_nhap": date(2020 + (index % 5), 1 + (index % 12), 1 + (index % 28)),
+                    "glucose": 4.0 + (index % 10) * 0.8,
+                    "creatinine": 60.0 + (index % 200),
                 }
             )
         return records
@@ -155,6 +175,20 @@ class SoftwareExecutor:
         if "tuoi_max_enc" in filters:
             max_age = int(filters["tuoi_max_enc"])
             records = [r for r in records if r["tuoi"] <= max_age]
+        if "ngay_nhap_vien_min_enc" in filters:
+            from datetime import date
+            try:
+                min_d = date.fromisoformat(str(filters["ngay_nhap_vien_min_enc"]))
+                records = [r for r in records if r.get("ngay_nhap", date(2020, 1, 1)) >= min_d]
+            except Exception:
+                pass
+        if "ngay_nhap_vien_max_enc" in filters:
+            from datetime import date
+            try:
+                max_d = date.fromisoformat(str(filters["ngay_nhap_vien_max_enc"]))
+                records = [r for r in records if r.get("ngay_nhap", date(2024, 12, 31)) <= max_d]
+            except Exception:
+                pass
         return len(records)
 
     def _fallback_keyword_search(self, keyword: str, filters: Dict[str, Any]) -> dict[str, Any]:
@@ -188,18 +222,38 @@ class SoftwareExecutor:
         if "tuoi_max_enc" in filters:
             max_age = int(filters["tuoi_max_enc"])
             records = [r for r in records if r["tuoi"] <= max_age]
+        if "ngay_nhap_vien_min_enc" in filters:
+            from datetime import date
+            try:
+                min_d = date.fromisoformat(str(filters["ngay_nhap_vien_min_enc"]))
+                records = [r for r in records if r.get("ngay_nhap", date(2020, 1, 1)) >= min_d]
+            except Exception:
+                pass
+        if "ngay_nhap_vien_max_enc" in filters:
+            from datetime import date
+            try:
+                max_d = date.fromisoformat(str(filters["ngay_nhap_vien_max_enc"]))
+                records = [r for r in records if r.get("ngay_nhap", date(2024, 12, 31)) <= max_d]
+            except Exception:
+                pass
 
         if query_type == "count":
             n_records = len(records)
             return SoftwareQueryResult(result=float(n_records), n_records=n_records)
 
-        values = [float(record["vien_phi"]) for record in records]
+        if "glucose" in query_type:
+            values = [float(record["glucose"]) for record in records]
+        elif "creatinine" in query_type:
+            values = [float(record["creatinine"]) for record in records]
+        else:
+            values = [float(record["vien_phi"]) for record in records]
+
         n_records = len(values)
         if not values:
             aggregate = 0.0
-        elif query_type == "sum_vien_phi":
+        elif query_type in ("sum_vien_phi", "sum"):
             aggregate = sum(values)
-        elif query_type == "avg_vien_phi":
+        elif query_type in ("avg_vien_phi", "avg_glucose", "avg_creatinine"):
             aggregate = sum(values) / n_records
         else:
             raise ValueError(f"Unknown query type: {query_type}")
@@ -213,28 +267,36 @@ class SoftwareExecutor:
             return float(plaintext)
         return float(plaintext)
 
-    def _query_mongo_records(self, filters: Dict[str, Any]) -> list[dict[str, Any]]:
+    def _decrypt_gcm_json(self, ciphertext: str) -> Any:
+        if self._gcm is None:
+            raise RuntimeError("gcm_dek key not available")
+        return self._gcm.decrypt_json(ciphertext)
+
+    def _query_mongo_records(self, filters: Dict[str, Any], projection: Dict[str, Any] | None = None) -> list[dict[str, Any]]:
         query = self._build_filter(filters)
-        return list(self.collection.find(query, {"vien_phi_enc": 1, "_id": 0}))
+        proj = projection if projection is not None else {"vien_phi_enc": 1, "_id": 0}
+        return list(self.collection.find(query, proj))
 
     @property
     def mongo_available(self) -> bool:
         return self._mongo_available
 
     def fetch_vien_phi_ciphertexts(self, filters: Dict[str, Any]) -> list[str]:
-        """Lấy danh sách ciphertext `vien_phi_enc` khớp filter (KHÔNG giải mã).
+        return self.fetch_ciphertexts("avg_vien_phi", filters)
 
-        Router dùng hàm này ở TEE mode để gom bản mã rồi đẩy vào Enclave — Cloud
-        chỉ thấy ciphertext, việc giải mã + tính toán xảy ra bên trong enclave.
-        Trả về [] nếu MongoDB không khả dụng (router sẽ quay về luồng pool cũ).
+    def fetch_ciphertexts(self, query_type: str, filters: Dict[str, Any]) -> list[str]:
+        """Lấy danh sách ciphertext y tế khớp filter (KHÔNG giải mã).
+
+        Router dùng hàm này ở TEE mode để gom bản mã rồi đẩy vào Enclave.
         """
         if not self._mongo_available:
             if STRICT_MODE:
                 raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids ciphertext fallback without MongoDB")
             return []
+        col_name = "ket_qua_xn_enc" if ("glucose" in query_type or "creatinine" in query_type) else "vien_phi_enc"
         try:
-            rows = self._query_mongo_records(filters)
-            return [row["vien_phi_enc"] for row in rows if row.get("vien_phi_enc")]
+            rows = self._query_mongo_records(filters, {col_name: 1, "_id": 0})
+            return [row[col_name] for row in rows if row.get(col_name)]
         except Exception:
             if STRICT_MODE:
                 raise
@@ -256,6 +318,8 @@ class SoftwareExecutor:
             "patient_id": 1,
             "ma_benh_enc": 1,
             "chan_doan_enc": 1,
+            "ket_qua_xn_enc": 1,
+            "clinical_note_enc": 1,
         }
         record = None
         for query in candidates:
@@ -277,10 +341,22 @@ class SoftwareExecutor:
 
         ma_benh = ""
         chan_doan = ""
+        ket_qua_xn = None
+        clinical_note = ""
         if record.get("ma_benh_enc") and self._dte_ma_benh:
             ma_benh = self._dte_ma_benh.decrypt(record["ma_benh_enc"], b"field:ma_benh")
         if record.get("chan_doan_enc") and self._gcm:
             chan_doan = self._gcm.decrypt_json(record["chan_doan_enc"])
+        if record.get("ket_qua_xn_enc") and self._gcm:
+            try:
+                ket_qua_xn = self._gcm.decrypt_json(record["ket_qua_xn_enc"])
+            except Exception:
+                pass
+        if record.get("clinical_note_enc") and self._gcm:
+            try:
+                clinical_note = self._gcm.decrypt_json(record["clinical_note_enc"])
+            except Exception:
+                pass
 
         return {
             "patient_id": record.get("patient_id", patient_id),
@@ -288,6 +364,8 @@ class SoftwareExecutor:
             "dept": dept,
             "ma_benh": ma_benh,
             "chan_doan": chan_doan,
+            "ket_qua_xn": ket_qua_xn,
+            "clinical_note": clinical_note,
         }
 
     def fetch_patient_pii_ciphertext_by_cmnd(self, cmnd: str) -> dict[str, Any]:
@@ -306,6 +384,8 @@ class SoftwareExecutor:
             "patient_id": 1,
             "ma_benh_enc": 1,
             "chan_doan_enc": 1,
+            "ket_qua_xn_enc": 1,
+            "clinical_note_enc": 1,
         }
         record = self.collection.find_one({"cmnd_dte": cmnd_dte_ciphertext}, projection)
 
@@ -323,10 +403,22 @@ class SoftwareExecutor:
 
         ma_benh = ""
         chan_doan = ""
+        ket_qua_xn = None
+        clinical_note = ""
         if record.get("ma_benh_enc") and self._dte_ma_benh:
             ma_benh = self._dte_ma_benh.decrypt(record["ma_benh_enc"], b"field:ma_benh")
         if record.get("chan_doan_enc") and self._gcm:
             chan_doan = self._gcm.decrypt_json(record["chan_doan_enc"])
+        if record.get("ket_qua_xn_enc") and self._gcm:
+            try:
+                ket_qua_xn = self._gcm.decrypt_json(record["ket_qua_xn_enc"])
+            except Exception:
+                pass
+        if record.get("clinical_note_enc") and self._gcm:
+            try:
+                clinical_note = self._gcm.decrypt_json(record["clinical_note_enc"])
+            except Exception:
+                pass
 
         return {
             "patient_id": record.get("patient_id"),
@@ -334,6 +426,8 @@ class SoftwareExecutor:
             "dept": dept,
             "ma_benh": ma_benh,
             "chan_doan": chan_doan,
+            "ket_qua_xn": ket_qua_xn,
+            "clinical_note": clinical_note,
         }
 
     def keyword_search(self, keyword: str, filters: Dict[str, Any] | None = None, limit: int = 20) -> dict[str, Any]:
@@ -415,14 +509,34 @@ class SoftwareExecutor:
             if query_type == "count":
                 return self.count(filters)
 
-            rows = self._query_mongo_records(filters)
-            values = [self._decrypt_vien_phi(row["vien_phi_enc"]) for row in rows if row.get("vien_phi_enc")]
+            col_name = "ket_qua_xn_enc" if ("glucose" in query_type or "creatinine" in query_type) else "vien_phi_enc"
+            rows = self._query_mongo_records(filters, {col_name: 1, "_id": 0})
+            
+            if "glucose" in query_type:
+                values = []
+                for row in rows:
+                    ct = row.get("ket_qua_xn_enc")
+                    if ct:
+                        data = self._decrypt_gcm_json(ct)
+                        if isinstance(data, dict) and "glucose" in data:
+                            values.append(float(data["glucose"]))
+            elif "creatinine" in query_type:
+                values = []
+                for row in rows:
+                    ct = row.get("ket_qua_xn_enc")
+                    if ct:
+                        data = self._decrypt_gcm_json(ct)
+                        if isinstance(data, dict) and "creatinine" in data:
+                            values.append(float(data["creatinine"]))
+            else:
+                values = [self._decrypt_vien_phi(row["vien_phi_enc"]) for row in rows if row.get("vien_phi_enc")]
+
             n_records = len(values)
             if not values:
                 aggregate = 0.0
-            elif query_type == "sum_vien_phi":
+            elif query_type in ("sum_vien_phi", "sum"):
                 aggregate = sum(values)
-            elif query_type == "avg_vien_phi":
+            elif query_type in ("avg_vien_phi", "avg_glucose", "avg_creatinine"):
                 aggregate = sum(values) / n_records
             else:
                 raise ValueError(f"Unknown query type: {query_type}")

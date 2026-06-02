@@ -124,11 +124,18 @@
           <select id="qtype">
             <option value="avg_vien_phi">Chi phí điều trị trung bình (AVG)</option>
             <option value="sum_vien_phi">Tổng chi phí điều trị (SUM)</option>
+            <option value="avg_glucose">Chỉ số Glucose trung bình (AVG Glucose)</option>
+            <option value="avg_creatinine">Chỉ số Creatinine trung bình (AVG Creatinine)</option>
             <option value="count">Thống kê số bệnh nhân (COUNT)</option>
           </select>
           <div class="row">
             <div><label>Mã bệnh</label><input id="mabenh" value="" placeholder="bỏ trống = tất cả"></div>
-            <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="" placeholder="bỏ trống = mọi tuổi"></div>
+            <div><label>Tuổi từ</label><input id="tuoimin" type="number" value="" placeholder="bỏ trống"></div>
+            <div><label>Tuổi đến</label><input id="tuoimax" type="number" value="" placeholder="bỏ trống"></div>
+          </div>
+          <div class="row" style="margin-top: 10px;">
+            <div><label>Nhập viện từ</label><input id="ngaymin" type="date" value=""></div>
+            <div><label>Nhập viện đến</label><input id="ngaymax" type="date" value=""></div>
           </div>
           <div class="muted" style="margin-top:10px">COUNT tổng bệnh nhân: để trống mã bệnh và tuổi. Nhập mã bệnh để đếm riêng một nhóm.</div>
           <div id="diseaseCodes" class="muted" style="margin-top:10px;line-height:1.7"></div>
@@ -302,6 +309,17 @@ function renderPatientDetails(data, targetId){
   const p = data.result || {};
   const pii = p.pii || {};
   const badge = data.mode === 'tee' ? '<span class="badge b-tee">🔒 TEE · Enclave Decrypted</span>' : '<span class="badge b-soft">Software Mode</span>';
+  
+  const lab = p.ket_qua_xn;
+  let labText = '—';
+  if (lab === '[MASKED]') {
+    labText = '🔒 Đã ẩn';
+  } else if (lab && typeof lab === 'object') {
+    labText = `Glucose: ${lab.glucose ?? '—'} mmol/L | Creatinine: ${lab.creatinine ?? '—'} µmol/L | HbA1c: ${lab.hba1c ?? '—'}%`;
+  } else if (lab) {
+    labText = String(lab);
+  }
+
   box.innerHTML = `
     <div style="margin-bottom: 12px;">${badge}</div>
     <div class="kv"><span>Mã định danh (Patient ID)</span><b>${escapeHtml(p.patient_id || '—')}</b></div>
@@ -309,6 +327,8 @@ function renderPatientDetails(data, targetId){
     <div class="kv"><span>Số CCCD (CMND)</span><b>${escapeHtml(fmt(pii.cmnd))}</b></div>
     <div class="kv"><span>Ngày sinh</span><b>${escapeHtml(fmt(pii.ngay_sinh))}</b></div>
     <div class="kv stack"><span>Địa chỉ</span><b>${escapeHtml(fmt(pii.dia_chi))}</b></div>
+    <div class="kv stack"><span>Kết quả xét nghiệm (Lab)</span><b>${escapeHtml(labText)}</b></div>
+    <div class="kv stack"><span>Ghi chú lâm sàng (Notes)</span><b>${escapeHtml(fmt(p.clinical_note || '—'))}</b></div>
     <div class="kv stack"><span>Tóm tắt bệnh án</span><b>${escapeHtml(fmt(pii.tom_tat_benh_an || '—'))}</b></div>
     <div class="kv stack"><span>Phác đồ điều trị</span><b>${escapeHtml(fmt(pii.phac_do_dieu_tri || '—'))}</b></div>
     <div class="kv"><span>Chẩn đoán</span><b>${escapeHtml(p.chan_doan || '—')} (${escapeHtml(p.ma_benh || '—')})</b></div>
@@ -444,16 +464,25 @@ async function runQuery(){
   if(!TOKEN){alert('Hãy Đăng nhập trước.');return;}
   const qtype=document.getElementById('qtype').value, filters={};
   const diseaseInput=document.getElementById('mabenh');
-  const mb=normalizeDiseaseCode(diseaseInput.value), tm=document.getElementById('tuoimin').value.trim();
+  const mb=normalizeDiseaseCode(diseaseInput.value);
+  const tm=document.getElementById('tuoimin').value.trim();
+  const tmax=document.getElementById('tuoimax').value.trim();
+  const nmin=document.getElementById('ngaymin').value.trim();
+  const nmax=document.getElementById('ngaymax').value.trim();
   diseaseInput.value=mb;
-  if(mb)filters.ma_benh=mb; if(tm)filters.tuoi_min_enc=parseInt(tm);
+  if(mb)filters.ma_benh=mb;
+  if(tm)filters.tuoi_min_enc=parseInt(tm);
+  if(tmax)filters.tuoi_max_enc=parseInt(tmax);
+  if(nmin)filters.ngay_nhap_vien_min_enc=nmin;
+  if(nmax)filters.ngay_nhap_vien_max_enc=nmax;
+
   const box=document.getElementById('resultBox'); box.innerHTML='<span class="muted">Đang xử lý…</span>';
   const {status,data}=await call(qtype,filters);
   if(status===403){box.innerHTML='<span class="badge b-403">Không có quyền</span><p class="muted">Đã ẩn: vai trò này bị từ chối truy vấn hoặc không đủ quyền xem kết quả.</p>';updateSec(null);return;}
   if(!data){box.innerHTML='<p class="muted">Lỗi '+status+'</p>';return;}
   const mode=data.mode, fell=mode!==data.requested_mode, res=data.result||{}, val=res.result;
   const badge=mode==='tee'?'<span class="badge b-tee">🔒 TEE · Enclave</span>':(fell?'<span class="badge b-fall">⚠️ Fallback · Software</span>':'<span class="badge b-soft">Software</span>');
-  const unit=(qtype.includes('vien_phi'))?' VND':'';
+  const unit=(qtype.includes('vien_phi'))?' VND':(qtype==='avg_glucose'?' mmol/L':(qtype==='avg_creatinine'?' µmol/L':''));
   let noticeHtml = '';
   if (ROLE === 'doctor' && res.n_records === 0) {
     noticeHtml = `<div class="badge b-403" style="margin-top:12px;width:100%;text-align:center;white-space:normal;line-height:1.5;font-weight:normal;box-sizing:border-box;">

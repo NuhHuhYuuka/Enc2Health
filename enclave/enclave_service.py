@@ -97,6 +97,34 @@ def decrypt_aes_gcm(ct_b64: str, key_name: str = 'gcm_dek') -> float:
     return value
 
 
+def decrypt_aes_gcm_json(ct_b64: str, key_name: str = 'gcm_dek') -> any:
+    """
+    Decrypt AES-GCM ciphertext containing JSON.
+    Plaintext exists only in scope of this function (register-safe).
+    """
+    if key_name not in _keys:
+        raise ValueError(f"Key '{key_name}' not found")
+    
+    key = _keys[key_name]
+    raw = base64.b64decode(ct_b64)
+    nonce, ct = raw[:12], raw[12:]
+    
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ct, None)
+    plaintext_buf = bytearray(plaintext)
+    
+    try:
+        decoded = plaintext_buf.decode('utf-8')
+        value = json.loads(decoded)
+    finally:
+        # Zero-fill immediately
+        plaintext_buf[:] = b'\x00' * len(plaintext_buf)
+        del plaintext_buf
+        del plaintext
+    
+    return value
+
+
 def query_duckdb(sql: str):
     """Execute SQL query in DuckDB."""
     if _conn is None:

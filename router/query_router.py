@@ -25,6 +25,7 @@ class QueryRouter:
     # Toán tử cần enclave (giải mã rồi mới tính được)
     TEE_QUERY_TYPES = {
         "sum_vien_phi", "avg_vien_phi",
+        "avg_glucose", "avg_creatinine",
         "sum", "avg", "count_distinct", "count distinct",
         "get_patient", "lookup_patient",
         "stddev", "median",
