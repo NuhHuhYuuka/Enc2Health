@@ -15,7 +15,7 @@ LONG_TAILSCALE_IP = 100.127.127.122
 LAN_TAILSCALE_IP  = 100.119.174.95
 NAM_TAILSCALE_IP  = 100.67.221.119
 LAN_DOMAIN        = domain Tailscale của Lan, dạng xxx.tailxxxx.ts.net
-NAM_DOMAIN        = domain Tailscale của Nam, dạng xxx.tailxxxx.ts.net
+NAM_DOMAIN        = yuwkaa-vmware-1.tail4cc053.ts.net
 ```
 
 Giá trị hiện có:
@@ -53,8 +53,8 @@ Ghi lại:
 Long: LONG_TAILSCALE_IP = 100.127.127.122
 Lan:  LAN_TAILSCALE_IP  = 100.119.174.95
 Nam:  NAM_TAILSCALE_IP  = 100.67.221.119
-Lan:  LAN_DOMAIN
-Nam:  NAM_DOMAIN
+Lan:  LAN_DOMAIN        = lan-bravo-15-b5dd.tail4cc053.ts.net
+Nam:  NAM_DOMAIN        = yuwkaa-vmware-1.tail4cc053.ts.net
 ```
 
 ## 0.1. Lan / VM2 - xin cert HTTPS Tailscale
@@ -209,7 +209,7 @@ Thay biến:
 ```text
 LONG_TAILSCALE_IP = IP Tailscale của Long
 LAN_DOMAIN        = domain Tailscale của Lan
-NAM_DOMAIN        = domain Tailscale của Nam
+NAM_DOMAIN        = yuwkaa-vmware-1.tail4cc053.ts.net
 ```
 
 ```bash
@@ -286,7 +286,7 @@ Client -> Router Nam HTTPS -> Mongo Long -> Enclave Lan HTTPS -> Router Nam -> C
 Mở trình duyệt:
 
 ```text
-https://NAM_DOMAIN:8000/ui
+https://yuwkaa-vmware-1.tail4cc053.ts.net:8000/ui
 ```
 
 Ví dụ:
@@ -333,6 +333,7 @@ pkill -f enclave/ecall_pool.py
 Nam / VM3 kiểm tra lại node:
 
 ```bash
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 curl "https://$NAM_DOMAIN:8000/nodes"
 ```
 
@@ -371,6 +372,7 @@ tail -20 /tmp/pool.log
 Nam / VM3 kiểm tra lại:
 
 ```bash
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 curl "https://$NAM_DOMAIN:8000/nodes"
 ```
 
@@ -397,7 +399,8 @@ curl "https://$LAN_DOMAIN:9091/health"
 Nam / VM3:
 
 ```bash
-tailscale cert
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
+tailscale cert "$NAM_DOMAIN"
 ls -l "$NAM_DOMAIN.crt" "$NAM_DOMAIN.key"
 tail -20 /tmp/router.log
 curl "https://$NAM_DOMAIN:8000/nodes"
@@ -406,6 +409,7 @@ curl "https://$NAM_DOMAIN:8000/nodes"
 Lệnh demo chính:
 
 ```bash
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 ROUTER_URL="https://$NAM_DOMAIN:8000" \
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
 python3 scripts/demo_nodes.py avg_vien_phi I01 60 admin
