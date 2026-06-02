@@ -25,7 +25,7 @@ LONG_TAILSCALE_IP = 100.127.127.122
 LAN_TAILSCALE_IP  = 100.119.174.95
 NAM_TAILSCALE_IP  = 100.67.221.119
 LAN_DOMAIN        = lan-bravo-15-b5dd.tail4cc053.ts.net
-NAM_DOMAIN        = lấy bằng lệnh `tailscale cert` trên máy Nam
+NAM_DOMAIN        = yuwkaa-vmware-1.tail4cc053.ts.net
 ```
 
 Lưu ý: HTTPS Tailscale phải truy cập bằng domain `.ts.net`, không dùng IP `100.x.y.z` cho URL HTTPS.
@@ -59,8 +59,6 @@ Nam:  NAM_DOMAIN
 
 ## 0.1. Lan / VM2 - xin cert HTTPS Tailscale
 
-Thay `LAN_DOMAIN` bằng domain thật của Lan.
-
 ```bash
 cd ~/Enc2Health
 source .venv/bin/activate
@@ -74,6 +72,11 @@ ls -l "$LAN_DOMAIN.crt" "$LAN_DOMAIN.key"
 Nếu lỗi quyền ghi file:
 
 ```bash
+cd ~/Enc2Health
+source .venv/bin/activate
+
+export LAN_DOMAIN=lan-bravo-15-b5dd.tail4cc053.ts.net
+
 sudo tailscale cert "$LAN_DOMAIN"
 sudo chown "$USER:$USER" "$LAN_DOMAIN.crt" "$LAN_DOMAIN.key"
 ls -l "$LAN_DOMAIN.crt" "$LAN_DOMAIN.key"
@@ -81,13 +84,11 @@ ls -l "$LAN_DOMAIN.crt" "$LAN_DOMAIN.key"
 
 ## 0.2. Nam / VM3 - xin cert HTTPS Tailscale
 
-Thay `NAM_DOMAIN` bằng domain thật của Nam.
-
 ```bash
 cd ~/Enc2Health
 source .venv/bin/activate
 
-export NAM_DOMAIN=<domain-cua-Nam>.tail4cc053.ts.net
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 
 tailscale cert "$NAM_DOMAIN"
 ls -l "$NAM_DOMAIN.crt" "$NAM_DOMAIN.key"
@@ -217,7 +218,7 @@ source .venv/bin/activate
 
 export LONG_TAILSCALE_IP=100.127.127.122
 export LAN_DOMAIN=lan-bravo-15-b5dd.tail4cc053.ts.net
-export NAM_DOMAIN=<domain-cua-Nam>.tail4cc053.ts.net
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
 ROUTER_TEE_PUSH_CIPHERTEXT=1 \
@@ -267,7 +268,7 @@ Router ok
 cd ~/Enc2Health
 source .venv/bin/activate
 
-export NAM_DOMAIN=<domain-cua-Nam>.tail4cc053.ts.net
+export NAM_DOMAIN=yuwkaa-vmware-1.tail4cc053.ts.net
 
 ROUTER_URL="https://$NAM_DOMAIN:8000" \
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
@@ -291,7 +292,7 @@ https://NAM_DOMAIN:8000/ui
 Ví dụ:
 
 ```text
-https://nam-xxx.tail4cc053.ts.net:8000/ui
+https://yuwkaa-vmware-1.tail4cc053.ts.net:8000/ui
 ```
 
 Thao tác trên UI:
