@@ -49,9 +49,10 @@ def node_status():
             port = f":{n['port']}" if n.get("port") else ""
             owner = f"({n['owner']})" if n.get("owner") and n["owner"] != "—" else ""
             line = f"{dot}  {n['label']:<34} {port:<7} {owner}"
-            print("│ " + line + " "*max(0, 62-len(_vis(line))) + "│")
+            print("│ " + line)
     except Exception as e:
-        print("│ " + c("Không kết nối được Router /nodes — Router đã chạy chưa?", RD))
+        msg = f"Không kết nối được Router /nodes: {type(e).__name__}: {e}"
+        print("│ " + c(msg, RD))
     print(c("└"+"─"*65+"┘", DIM))
 
 
