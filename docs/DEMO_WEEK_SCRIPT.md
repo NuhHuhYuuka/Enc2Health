@@ -27,21 +27,38 @@ hostname -I
 sudo ufw disable
 ```
 
-## 1. Long / VM1 - chạy MongoDB và sinh dữ liệu mã hóa
+## 1. Long / VM1 - chạy MongoDB, Vault và sinh dữ liệu mã hóa
 
 ```bash
 cd ~/Enc2Health
 source .venv/bin/activate
 
+# 1.1 Khởi chạy MongoDB
 sudo systemctl enable --now docker
 sudo docker rm -f enc2health-mongo 2>/dev/null || true
 sudo docker run -d --name enc2health-mongo \
   -p 0.0.0.0:27017:27017 \
   --restart unless-stopped mongo:7
 
+# 1.2 Sinh dữ liệu EHR giả lập (đã mã hóa)
 FORCE_RECREATE=1 EHR_FORCE_RECREATE=1 python crypto/data/generate_ehr.py
 
+# 1.3 Khởi chạy Vault server ở chế độ dev mode (lắng nghe mọi IP để Lan và Nam kết nối)
+nohup vault server -dev \
+  -dev-listen-address="0.0.0.0:8200" \
+  -dev-root-token-id="enc2health-root-token" > /tmp/vault.log 2>&1 &
+
+sleep 3
+
+# Cấu hình biến môi trường tạm để setup Vault
+export VAULT_ADDR='http://127.0.0.1:8200'
+export VAULT_TOKEN='enc2health-root-token'
+
+# 1.4 Thiết lập secrets engine, upload keypairs và DEK lên Vault
+bash crypto/vault/setup_vault.sh
+
 echo "MongoDB Long ready at $(hostname -I | awk '{print $1}'):27017"
+echo "Vault Long ready at $(hostname -I | awk '{print $1}'):8200"
 ```
 
 Kiểm tra container:
@@ -72,14 +89,18 @@ Thay `LONG_IP` bằng IP của VM1.
 cd ~/Enc2Health
 source .venv/bin/activate
 
+# Khởi chạy Pool kết nối tới Mongo và Vault của Long
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
 T8_POOL_HOST=0.0.0.0 \
-T8_ALLOW_LOCAL_KEY_FALLBACK=1 \
+T8_ALLOW_LOCAL_KEY_FALLBACK=0 \
 MONGO_URI=mongodb://LONG_IP:27017 \
+VAULT_ADDR=http://LONG_IP:8200 \
+VAULT_TOKEN=enc2health-root-token \
 nohup .venv/bin/python enclave/ecall_pool.py > /tmp/pool.log 2>&1 &
 
 sleep 4
-tail -5 /tmp/pool.log
+# Kiểm tra log xem Pool đã lấy DEK từ Vault thành công chưa (không fallback local keys)
+tail -20 /tmp/pool.log
 
 echo "Pool Lan ready at $(hostname -I | awk '{print $1}'):9091"
 ```
@@ -204,9 +225,9 @@ Nam / VM3 kiểm tra lại node:
 curl http://localhost:8000/nodes
 ```
 
-Kết quả mong đợi: Enclave/Pool `down`, các node khác còn chạy.
+Kết quả mong đợi: Enclave/Pool `down` (trạng thái hiển thị down trên UI/Console), MongoDB và Vault vẫn `ok`.
 
-Lan / VM2 bật lại Enclave:
+Lan / VM2 bật lại Enclave (giữ kết nối tới Vault của Long):
 
 ```bash
 cd ~/Enc2Health
@@ -214,12 +235,14 @@ source .venv/bin/activate
 
 AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 \
 T8_POOL_HOST=0.0.0.0 \
-T8_ALLOW_LOCAL_KEY_FALLBACK=1 \
+T8_ALLOW_LOCAL_KEY_FALLBACK=0 \
 MONGO_URI=mongodb://LONG_IP:27017 \
+VAULT_ADDR=http://LONG_IP:8200 \
+VAULT_TOKEN=enc2health-root-token \
 nohup .venv/bin/python enclave/ecall_pool.py > /tmp/pool.log 2>&1 &
 
 sleep 4
-tail -5 /tmp/pool.log
+tail -20 /tmp/pool.log
 ```
 
 Nam / VM3 kiểm tra lại:
@@ -235,13 +258,14 @@ Long / VM1:
 ```bash
 hostname -I
 sudo docker ps
+vault status # Kiểm tra Vault hoạt động bình thường
 ```
 
 Lan / VM2:
 
 ```bash
 hostname -I
-tail -5 /tmp/pool.log
+tail -20 /tmp/pool.log # Đảm bảo log ghi nhận "Loaded key from Vault"
 ```
 
 Nam / VM3:
@@ -249,7 +273,7 @@ Nam / VM3:
 ```bash
 hostname -I
 tail -5 /tmp/router.log
-curl http://localhost:8000/nodes
+curl http://localhost:8000/nodes # Toàn bộ 3 node Mongo, Pool, Vault đều ok
 ```
 
 Lệnh demo chính:
