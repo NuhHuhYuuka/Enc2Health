@@ -103,8 +103,8 @@ Nếu ta mã hóa dữ liệu theo cách thông thường (như mã hóa đĩa A
 [Hồ sơ bệnh nhân gốc]
  ├── Họ tên, CCCD, Địa chỉ, Bệnh án ───> Mã hóa bất đối xứng (ECC ECIES) ──> pii_enc
  ├── Mã bệnh, Khoa phòng, CCCD (DTE) ──> Mã hóa tất định (AES-SIV) ────────> ma_benh_enc, khoa_phong_enc, cmnd_dte
- ├── Tuổi, Ngày nhập viện ─────────────> Mã hóa bảo toàn thứ tự (OPE) ──────> tuoi_enc
- ├── Viện phí ────────────────────────> Mã hóa đối xứng ngẫu nhiên (GCM) ──> vien_phi_enc
+ ├── Tuổi, Ngày nhập viện ─────────────> Mã hóa bảo toàn thứ tự (OPE/ORE) ──> tuoi_enc, ngay_nhap_vien_enc
+ ├── Viện phí, Chỉ số XN, Ghi chú ─────> Mã hóa đối xứng ngẫu nhiên (GCM) ──> vien_phi_enc, ket_qua_xn_enc, clinical_note_enc
  └── Triệu chứng lâm sàng ─────────────> Chỉ mục tìm kiếm ngược SSE ────────> sse_index (HMAC + GCM)
 ```
 
@@ -135,9 +135,9 @@ Nếu ta mã hóa dữ liệu theo cách thông thường (như mã hóa đĩa A
 
 ### 2.4. Mã hóa đối xứng ngẫu nhiên AES-GCM-256 (Dành cho tính toán số liệu)
 * **Ý tưởng**: Đây là mã hóa tiêu chuẩn bảo mật cực cao. Cùng một số tiền viện phí `10.000.000` VND của 2 bệnh nhân khác nhau sẽ cho ra 2 bản mã hoàn toàn khác nhau nhờ vector khởi tạo (IV) ngẫu nhiên. Kẻ tấn công nhìn vào không thể biết ai đóng nhiều tiền hơn ai.
-* **Cách dùng**: Mã hóa trường viện phí (`vien_phi_enc`) và kết quả xét nghiệm y khoa.
+* **Cách dùng**: Mã hóa trường viện phí (`vien_phi_enc`) và kết quả xét nghiệm y khoa (`ket_qua_xn_enc`, `clinical_note_enc`).
 * **Lý do lựa chọn**:
-  - **Bảo mật tuyệt đối**: Dữ liệu tài chính/viện phí nhạy cảm không được phép rò rỉ tần suất hay thứ tự cho Cloud.
+  - **Bảo mật tuyệt đối**: Dữ liệu tài chính/viện phí nhạy cảm không được phép rò rỉ tần suất hay thứ tự cho Cloud. Dữ liệu kết quả xét nghiệm nhạy cảm dưới dạng JSON phức tạp được giải mã an toàn trong enclave để thống kê trung bình lâm sàng.
   - **Lựa chọn AES-GCM (AEAD)**: Cung cấp tính năng xác thực dữ liệu liên kết (**Authenticated Encryption**). Giúp phát hiện ngay lập tức nếu kẻ tấn công hoặc Cloud admin sửa đổi trái phép dữ liệu bản mã (chống giả mạo số liệu viện phí). Đồng thời, thuật toán này được tăng tốc trực tiếp bằng phần cứng thông qua tập lệnh **AES-NI** của CPU, đem lại hiệu năng giải mã cực nhanh khi xử lý luồng (stream) hàng loạt trong Enclave.
 * **Tệp tin**: `crypto/crypto/gcm.py`.
 
@@ -194,8 +194,8 @@ Hệ thống hoạt động dựa trên sự phối hợp của 5 nút (nodes) c
 * **Cấu trúc collection `patient_records`**:
   - Cột định danh plaintext: `patient_id` (UUIDv5 ngẫu nhiên), `dept` (Khoa để biết dùng key khoa nào giải mã).
   - Cột mã hóa đối xứng tất định (DTE): `ma_benh_enc`, `khoa_phong_enc`, `cmnd_dte`.
-  - Cột mã hóa bảo toàn thứ tự (OPE): `tuoi_enc`.
-  - Cột mã hóa đối xứng ngẫu nhiên (AES-GCM): `vien_phi_enc`.
+  - Cột mã hóa bảo toàn thứ tự (OPE/ORE): `tuoi_enc`, `ngay_nhap_vien_enc`.
+  - Cột mã hóa đối xứng ngẫu nhiên (AES-GCM): `vien_phi_enc`, `ket_qua_xn_enc`, `clinical_note_enc`.
   - Cột mã hóa bất đối xứng (ECC ECIES): `pii_enc`.
 
 ### 4. TEE Enclave Pool Node (FastAPI chạy trong Gramine - Cổng `9091`)
@@ -241,10 +241,10 @@ Dưới đây là mô tả chi tiết từng bước hoạt động của hệ t
                                                                              │
    [Query Router] <── (12) Trả về plaintext PII y tế ────────────────────────┘
          │
-         ├── (13) Giải mã ma_benh_enc (DTE) và chan_doan_enc (AES-GCM) cục bộ
+         ├── (13) Giải mã ma_benh_enc (DTE), chan_doan_enc (AES-GCM), ket_qua_xn_enc (AES-GCM JSON) và clinical_note_enc (AES-GCM) cục bộ
          ├── (14) Áp dụng RBAC:
-         │        - Giữ nguyên: ho_ten, cmnd, dia_chi, ngay_sinh, ma_benh, chan_doan
-         │        - Mask thành "[MASKED]": tom_tat_benh_an, phac_do_dieu_tri
+         │        - Giữ nguyên: ho_ten, cmnd, dia_chi, ngay_sinh, ma_benh, chan_doan, ket_qua_xn, clinical_note (chỉ dành cho doctor/admin)
+         │        - Mask thành "[MASKED]": tom_tat_benh_an, phac_do_dieu_tri (và ket_qua_xn, clinical_note đối với các vai trò khác)
          │
 [Trình duyệt] <── (15) HTTP 200: Trả về thông tin đã được phân quyền và che giấu ẩn y tế
 ```

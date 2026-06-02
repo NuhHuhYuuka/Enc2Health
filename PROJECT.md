@@ -65,12 +65,12 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 | Private key chỉ giải mã trong Enclave | Pool nhận `pii_enc` → lấy private key theo khoa từ Vault → `ecc_decrypt` trong Pool/TEE → zero-fill biến key sau dùng | ✅ |
 | Lâm sàng (mã bệnh, khoa) — DTE AES-SIV, search trên ciphertext | `crypto/crypto/dte.py` (AES-SIV-256, per-field key) | ✅ |
 | Keyword search — static SSE encrypted inverted index | `crypto/crypto/sse.py` + collection `sse_index` + endpoint `/search` | ✅ HMAC search token + AES-GCM encrypted postings; đo search/volume/access leakage |
-| Range (tuổi, ngày) — ORE/OPE | `crypto/crypto/ore.py` (Boldyreva OPE qua `pyope`) | ✅ |
-| Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ |
+| Range (tuổi, ngày) — ORE/OPE | `crypto/crypto/ore.py` (Boldyreva OPE qua `pyope`) | ✅ Hỗ trợ range lọc theo tuổi và khoảng ngày nhập viện (`ngay_nhap_vien_enc`) trên cả UI & backend |
+| Chỉ số XN & viện phí — AES-GCM-256, giải mã trong SGX | `crypto/crypto/gcm.py` + `enclave/enclave_service.py` | ✅ Giải mã và tính toán AVG Glucose/Creatinine từ JSON cấu trúc nhạy cảm trong enclave |
 | KMS Envelope Encryption (DEK bọc bởi MK) | `crypto/vault/*` + `setup_vault.sh` + `key_rotation.py` | ✅ (Vault Transit wrap/unwrap DEK thật) |
-| RBAC/ABAC qua JWT, chính sách theo thuộc tính y tế | `router/rbac.py` + `router/abac.py` + `common/auth.py` | ✅ RBAC role + ABAC dept-scoping (bác sĩ chỉ xem khoa mình) |
-| Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ |
-| TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` + `enclave_service.py` giải mã AES-GCM và aggregate DuckDB | ✅ |
+| RBAC/ABAC qua JWT, chính sách theo thuộc tính y tế | `router/rbac.py` + `router/abac.py` + `common/auth.py` | ✅ RBAC role + ABAC dept-scoping. Doctor/Admin thấy chi tiết XN và bệnh án giải mã; staff khác bị mask |
+| Software Mode trên MongoDB FLE (= / range) | `generate_ehr.py` tạo data; Router dùng `software_executor.py` query thật | ✅ Hỗ trợ range ngày và tính toán glucose/creatinine fallback |
+| TEE Mode chạy DuckDB trong SGX (SUM/AVG) | Router gom ciphertext → đẩy Pool; `enclave/ecall_pool.py` + `enclave_service.py` giải mã AES-GCM và aggregate DuckDB | ✅ Hỗ trợ đẩy cả vien_phi_enc và ket_qua_xn_enc để aggregate DuckDB |
 | Self-adaptive: probe EPC, fallback khi >80% | `router/probing.py` + `router/adaptive.py` + `router/resource_monitor.py` | ✅ logic + đọc RSS/EPC thật từ `/proc` |
 | Router lấy DEK từ Vault sau attestation | `ecall_client.py` + `vault_client.py` | ⚠️ Attestation đang ở chế độ signed simulation (HMAC + freshness), chưa phải SGX quote/DCAP thật |
 | Đánh giá hiệu năng overhead < 2x | `tests/benchmark.py` (TEE ~2x Software) | ✅ |
@@ -103,9 +103,9 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **Probing (T5)** — `router/probing.py`: thread probe mỗi 5s, lock baseline sau 3 lần, phát hiện latency ≥ 2× baseline.
 - ✅ **Adaptive Controller (T6)** — `router/adaptive.py`: state machine NORMAL ⇄ FALLBACK với **hysteresis** (fallback ≥80%, restore ≤60% chống flapping), núm mô phỏng áp lực (`set_simulated_pressure` + `/adaptive/simulate`), switch log có pressure/nguồn, endpoint `/adaptive`.
 - ✅ **ECALL client (T9)** — `router/ecall_client.py`: HTTP client tới pool, JWT Bearer tự sinh, hỗ trợ mTLS cert + `/attest` verification (MRENCLAVE + chữ ký HMAC + freshness), fallback `httpx`→`requests` khi mTLS lỗi; **`query(..., ciphertexts=...)` đẩy kèm bản mã vào enclave** (TEE path).
-- ✅ **Software Executor** — `router/software_executor.py`: SOFTWARE/fallback path query MongoDB ciphertext thật — mã hóa điều kiện bằng DTE (`ma_benh`) + ORE (`tuoi` range), giải mã viện phí AES-GCM để SUM/AVG/COUNT. **Strict mode:** `SOFTWARE_STRICT_MODE=1` sẽ fail-fast, không rơi về dữ liệu giả. `fetch_vien_phi_ciphertexts(filters)` gom bản mã cho Router đẩy sang enclave.
+- ✅ **Software Executor** — `router/software_executor.py`: SOFTWARE/fallback path query MongoDB ciphertext thật — mã hóa điều kiện bằng DTE (`ma_benh`) + ORE (`tuoi` range, `ngay_nhap_vien` range), giải mã viện phí và lab results (GCM JSON) để SUM/AVG/COUNT. **Strict mode:** `SOFTWARE_STRICT_MODE=1` sẽ fail-fast. `fetch_ciphertexts(query_type, filters)` gom bản mã tương ứng (vien_phi_enc hoặc ket_qua_xn_enc).
 - ✅ **Resource Monitor** — `router/resource_monitor.py`: đọc RSS thật từ `/proc/<pid>/status`, dò EPC từ `/proc/<pid>/smaps` (best-effort), ghi snapshot JSON; thay cho công thức nội suy RSS cũ.
-- ✅ **Main service** — `router/main.py`: FastAPI :8000, `/query` `/health` `/adaptive` `/metrics`, tích hợp đủ T1/T2/T4/T6/T9; SOFTWARE mode gọi `software_executor` (đã bỏ placeholder), JWT Bearer bắt buộc.
+- ✅ **Main service** — `router/main.py`: FastAPI :8000, `/query` `/health` `/adaptive` `/metrics`, tích hợp đủ T1/T2/T4/T6/T9; hỗ trợ phân loại thêm `avg_glucose`/`avg_creatinine`, tự động gom đúng loại ciphertext đẩy sang TEE, và giải mã trả về kết quả chi tiết kèm RBAC masking.
 - ✅ **PII lookup path** — `get_patient`/`lookup_patient` luôn giữ ở TEE (không bị adaptive hạ xuống Software): Router fetch `pii_enc` + `dept` từ Mongo, kiểm ABAC đúng khoa, gọi Pool `/query/pii`, rồi mask PII theo role.
 - ✅ **Smoke run mTLS local** — `Makefile` (`make smoke-local`), `scripts/smoke_test_local.sh`, `scripts/generate_jwt.py`, `docs/SMOKE_RUN.md`: chạy 1 lệnh dựng cả Pool+Router qua TLS, smoke pass.
 - ✅ **Demo E2E có lời dẫn** — `scripts/demo_e2e.py`: chạy truy vấn "AVG viện phí I01 trên 60 tuổi" trên 10k record mã hóa thật, in từng bước (CSP thấy ciphertext → enclave giải mã → bác sĩ nhận 1 số → researcher bị mask). Dùng làm artifact giải thích + bảo vệ đồ án.
@@ -114,9 +114,9 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 
 ### 3.3. TEE Enclave & Observability — Lan (`enclave/`)
 > ⚠️ Folder `enclave/` đã được gỡ khỏi git (quá nặng) và `.gitignore`; Lan chia sẻ qua Google Drive. Các đường dẫn dưới đây trỏ tới cây thư mục local của Lan, không có trên GitHub.
-- ✅ **ECALL Task Pool (T8)** — `enclave/ecall_pool.py`: FastAPI :9091, ThreadPool 8 workers, index theo ma_benh/tuoi/khoa, JWT bắt buộc, `/attest` signed simulation + strict mode (`T8_STRICT_MODE`).
+- ✅ **ECALL Task Pool (T8)** — `enclave/ecall_pool.py`: FastAPI :9091, ThreadPool 8 workers, index theo ma_benh/tuoi/khoa/ngay_nhap, JWT bắt buộc, hỗ trợ lọc ORE date range và tính toán averages cho Glucose & Creatinine.
 - ✅ **PII decrypt endpoint** — `POST /query/pii`: lấy private key theo khoa từ Vault (`enc2health/keypairs/<dept>`, local fallback chỉ khi bật `T8_ALLOW_LOCAL_KEY_FALLBACK=1`), giải mã `pii_enc` bằng ECC P-384 trong Pool/TEE, trả plaintext cho Router để RBAC mask.
-- ✅ **Enclave service (DuckDB)** — `enclave/enclave_service.py`: DuckDB in-memory + AES-GCM decrypt (register-safe, zero-fill).
+- ✅ **Enclave service (DuckDB)** — `enclave/enclave_service.py`: DuckDB in-memory + AES-GCM decrypt + JSON decrypt (`decrypt_aes_gcm_json`) giải mã dữ liệu phức tạp.
 - ✅ **Gramine SGX manifest** — `enclave/T1_gramine/duckdb_real.manifest(.sgx)`: trusted_files có SHA-256, enclave 128M, binary DuckDB ký thật.
 - ✅ **T3 — AES-GCM C benchmark** — `enclave/T3/T3_aes_gcm_benchmark.c` (register vs RAM mode).
 - ✅ **T4 — OpenSSL AES-NI microbench** — `enclave/T4/` + `T4_results/` (rsa4096, ecdsap384, aes256gcm; host vs enclave).
@@ -127,7 +127,7 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 - ✅ **HIPAA audit log** — `enclave/hipaa_audit.log`.
 
 ### 3.4. Tests & Benchmark (chung)
-- ✅ **Unit tests (T3)** — `tests/test_router.py` (Router/RBAC/Cost Model).
+- ✅ **Unit tests (T3)** — `tests/test_router.py` (Router/RBAC/Cost Model) và `tests/test_router_enhancements.py` (kiểm tra khoảng ngày ORE, AVG Glucose/Creatinine và RBAC masking chi tiết).
 - ✅ **E2E tests (T10)** — `tests/test_e2e.py` **10/10 PASSED live**: 7 ca aggregate/mask/403/software/filter đối chiếu MongoDB thật (DTE+ORE+GCM) + 3 ca PII (doctor đúng khoa thấy PII, researcher bị mask, doctor sai khoa bị 403).
 - ✅ **EPC saturation (T7)** — `tests/test_adaptive.py` (live endpoint + `/adaptive/simulate` fallback/restore).
 - ✅ **Benchmark 3 mode (T11)** — `tests/benchmark.py` → `benchmark_results.json` (TEE ~2× Software).
@@ -250,10 +250,10 @@ python3 tests/leakage.py && python3 tests/attack_bipartite.py
 
 *PROJECT.md — bản đồ trạng thái đồ án Enc²Health. Cập nhật mỗi khi hoàn thành một mục IN DEV.*
 
-## RECENT RUNS (2026-05-31)
+## RECENT RUNS (2026-06-02)
 
-- `tests/test_router.py`: 33/33 passed after PII route/RBAC/fetch coverage ✅
-- `tests/test_e2e.py`: 10/10 passed against live Mongo + Vault + Pool + Router stack ✅
+- `tests/test_router.py` + `tests/test_router_enhancements.py`: 42/42 passed after ORE date, AVG lab and RBAC masking enhancements integration ✅
+- `tests/test_adaptive.py` + `tests/test_e2e.py`: 12/12 passed against live persistent stack (Mongo + Vault + Pool + Router) ✅
 - `tests/test_e2e.py` (Vault verify run): 7/7 PASSED with `T8_ALLOW_LOCAL_KEY_FALLBACK=0`; Pool log shows `DEK source: vault` ✅
 - `tests/test_e2e.py` (full stack: MongoDB thật + Vault): 7/7 PASSED, `T8_ALLOW_LOCAL_KEY_FALLBACK=0` ✅
 - `tests/leakage.py`: executed, `leakage_results.json` generated ✅

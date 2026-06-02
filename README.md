@@ -12,7 +12,7 @@
     <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi" alt="FastAPI"/>
     <img src="https://img.shields.io/badge/SGX-Gramine%20Simulation-blue?style=flat-square" alt="SGX"/>
     <img src="https://img.shields.io/badge/KMS-AES--GCM%20Enclave-black?style=flat-square" alt="KMS"/>
-    <img src="https://img.shields.io/badge/Tests-18%20passed-success?style=flat-square&logo=pytest" alt="Tests"/>
+    <img src="https://img.shields.io/badge/Tests-54%20passed-success?style=flat-square&logo=pytest" alt="Tests"/>
     <img src="https://img.shields.io/badge/NT219-Q2.ANTT-orange?style=flat-square" alt="NT219"/>
   </p>
 
@@ -47,8 +47,8 @@ GROUP BY          COUNT DISTINCT
 
 | Operator | Mode | Lý do |
 |---|---|---|
-| `=`, `JOIN`, `GROUP BY`, `COUNT` | Software (DTE/ORE) | Equality-preserving, nhanh |
-| `SUM`, `AVG`, `COUNT DISTINCT` | TEE Enclave / Gramine simulation | Cần tính toán bảo mật |
+| `=`, `JOIN`, `GROUP BY`, `COUNT` | Software (DTE/ORE) | Equality-preserving, nhanh (tuổi và khoảng ngày nhập viện) |
+| `SUM`, `AVG`, `COUNT DISTINCT` (viện phí, glucose, creatinine) | TEE Enclave / Gramine simulation | Cần tính toán bảo mật |
 | EPC > 80% (latency ≥ 2× baseline) | Fallback → Software | Adaptive switching tự động |
 
 ---
