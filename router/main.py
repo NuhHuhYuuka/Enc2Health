@@ -32,6 +32,9 @@ if _cors:
 DEV_UI = os.environ.get("ENC2HEALTH_DEV_UI", "0") == "1"
 UI_HTML = Path(__file__).resolve().parent / "ui.html"
 
+# Node Authentication (IAM/IdP) — node DUY NHẤT ký JWT (ES256). Router chỉ verify.
+IAM_URL = os.environ.get("IAM_URL", "http://127.0.0.1:8080").rstrip("/")
+
 router   = QueryRouter()
 abac     = AbacPolicy()
 ecall    = EcallClient()
@@ -263,6 +266,13 @@ async def nodes_status():
         mongo_ok = software_executor._detect_mongo_available()
     except Exception:
         mongo_ok = False
+    iam_ok = False
+    try:
+        import httpx
+        r = httpx.get(f"{IAM_URL}/health", timeout=1.5)
+        iam_ok = r.status_code == 200
+    except Exception:
+        iam_ok = False
     vault_ok = False
     try:
         import httpx
@@ -274,6 +284,7 @@ async def nodes_status():
     return {
         "nodes": [
             {"id": "client",  "label": "Client (EMR / Bác sĩ)",        "owner": "—",    "status": "ok"},
+            {"id": "iam",     "label": "Authentication Server (IAM/IdP)", "owner": "Nam", "port": 8080, "status": "ok" if iam_ok else "down"},
             {"id": "router",  "label": "Query Router (Middleware)",    "owner": "Nam",  "port": 8000,  "status": "ok"},
             {"id": "mongo",   "label": "MongoDB (Cloud · ciphertext)", "owner": "Long", "port": 27017, "status": "ok" if mongo_ok else "down"},
             {"id": "enclave", "label": "ECALL Pool / Enclave (TEE)",   "owner": "Lan",  "port": 9091,  "status": "ok" if pool_ok else "down"},
@@ -298,13 +309,28 @@ class TokenRequest(BaseModel):
 
 @app.post("/dev/token")
 async def dev_token(req: TokenRequest):
-    """Cấp JWT cho UI demo theo vai trò/khoa. CHỈ dev (ENC2HEALTH_DEV_UI=1).
+    """Cổng đăng nhập demo cho UI: CHUYỂN TIẾP yêu cầu cấp token sang node IAM.
 
-    KHÔNG dùng ở production — đây là tiện ích demo để khỏi phải tự sinh token.
+    Đúng mô hình: Gateway KHÔNG ký token — chỉ forward sang Authentication Server
+    (IAM, giữ private key ES256). Nếu IAM không reachable (dev 1 máy chưa bật IAM),
+    fallback ký local để khỏi kẹt demo. CHỈ bật khi ENC2HEALTH_DEV_UI=1.
     """
     if not DEV_UI:
         raise HTTPException(status_code=404, detail="disabled")
+    # 1) Ưu tiên: forward sang IAM node (Router không giữ vai trò ký).
+    try:
+        import httpx
+        r = httpx.post(f"{IAM_URL}/token",
+                       json={"role": req.role, "dept": req.dept}, timeout=4)
+        if r.status_code == 200:
+            data = r.json()
+            return {"token": data["access_token"], "role": req.role,
+                    "dept": req.dept, "issuer": "iam", "alg": data.get("alg")}
+    except Exception:
+        pass
+    # 2) Fallback dev: ký local (chỉ khi keypair có sẵn trên máy này).
     from common.auth import generate_test_jwt
     claims = {"dept": req.dept} if req.dept else None
     token = generate_test_jwt(f"ui-{req.role}", req.role, claims=claims)
-    return {"token": token, "role": req.role, "dept": req.dept}
+    return {"token": token, "role": req.role, "dept": req.dept,
+            "issuer": "router-fallback", "alg": "ES256"}

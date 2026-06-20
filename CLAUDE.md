@@ -14,6 +14,7 @@ Môn **NT219.Q2.ANTT**. 3 thành viên: Long (mã hóa & KMS), Lan (TEE/SGX & ob
 
 | Service | Cổng | Chủ | File chính |
 |---|---|---|---|
+| Authentication Server (IAM/IdP) | 8080 | Nam | `iam/main.py` |
 | Query Router (FastAPI) | 8000 | Nam | `router/main.py` |
 | ECALL Task Pool (TEE sim) | 9091 | Lan | `enclave/ecall_pool.py` *(không trong git)* |
 | HashiCorp Vault | 8200 | Long | `crypto/vault/` |
@@ -21,15 +22,16 @@ Môn **NT219.Q2.ANTT**. 3 thành viên: Long (mã hóa & KMS), Lan (TEE/SGX & ob
 | Prometheus / Grafana / exporter | 9090 / 3000 / 8002 | Lan | `enclave/monitoring/` *(không trong git)* |
 | MongoDB | 27017 | Long | data: `crypto/data/generate_ehr.py` |
 
-Luồng: `Client+JWT → Router (RBAC/ABAC → route → cost → adaptive) → {TEE: Pool/DuckDB/AES-GCM aggregate hoặc ECC PII decrypt | SOFTWARE: MongoDB DTE/ORE} → Vault (DEK + keypair theo khoa)`.
+Luồng: `Client → IAM (cấp JWT ES256) → Router (ABAC → route → cost → adaptive, chỉ VERIFY JWT bằng public key) → {TEE: Pool/DuckDB/AES-GCM aggregate hoặc ECC PII decrypt | SOFTWARE: MongoDB DTE/ORE} → Vault (DEK + keypair theo khoa)`.
 
 ## Bố cục repo (lưu ý cái gì KHÔNG trong git)
 
 ```
-router/      # Nam — main, query_router, cost_model, rbac, auth, probing,
-             #       adaptive, ecall_client, software_executor, resource_monitor
-common/      # auth.py — JWT HS256 dùng chung
-crypto/      # Long — crypto/{dte,ore,gcm,asym}.py, vault/, kms_api/, data/generate_ehr.py
+iam/         # Nam — main.py: Authentication Server (IdP) ký JWT ES256 (node riêng)
+router/      # Nam — main, query_router, cost_model, abac (engine duy nhất; rbac=shim), auth(shim),
+             #       probing, adaptive, ecall_client, software_executor, resource_monitor
+common/      # auth.py — JWT ES256 dùng chung (sign=private key/IAM, verify=public key)
+crypto/      # Long — crypto/{dte,ore,gcm,asym}.py, vault/, kms_api/, data/{generate_ehr,generate_jwt_keys}.py
 tests/       # benchmark, benchmark_concurrent, leakage, attack_bipartite, test_e2e, test_router, test_adaptive
 scripts/     # smoke_test_local.sh, generate_mtls_certs.sh, generate_jwt.py
 docs/        # SMOKE_RUN.md, LIMITATIONS.md (threat model/giới hạn), EVALUATION.md (kết quả)
@@ -50,8 +52,12 @@ python3 scripts/demo_abac.py
 # Smoke E2E mTLS local (1 lệnh — khuyến nghị)
 make smoke-local
 
-# Chạy router thủ công
-AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 uvicorn router.main:app --port 8000
+# Sinh keypair JWT ES256 (1 lần, vào crypto/data/keys/) — IAM ký, Router/Pool verify
+python3 crypto/data/generate_jwt_keys.py
+# Chạy node Authentication (IAM) — node cấp JWT
+uvicorn iam.main:app --port 8080
+# Chạy router thủ công (chỉ verify JWT; IAM_URL trỏ tới node IAM)
+IAM_URL=http://127.0.0.1:8080 uvicorn router.main:app --port 8000
 
 # Tests
 python3 -m pytest tests/test_router.py tests/test_e2e.py -v   # test_e2e tự skip nếu stack chưa live
@@ -64,13 +70,13 @@ python3 crypto/data/generate_ehr.py
 
 ## Quy ước & cạm bẫy cần nhớ
 
-- **JWT bắt buộc:** mọi `/query` (Router lẫn Pool) cần `Authorization: Bearer <JWT>` (HS256, env `AUTH_JWT_SECRET`). Role lấy từ claim, KHÔNG tin `role` trong body.
+- **JWT bắt buộc (ES256 bất đối xứng):** mọi `/query` (Router lẫn Pool) cần `Authorization: Bearer <JWT>`. **Ký bằng ES256 (ECDSA P-256)** — chỉ node **IAM** (`iam/main.py`, giữ `crypto/data/keys/jwt_es256_private.pem`) ký được; Router/Pool chỉ **verify** bằng public key (`jwt_es256_public.pem`). Sinh khóa: `python3 crypto/data/generate_jwt_keys.py`. `validate_jwt_bearer` khóa cứng `algorithms=["ES256"]` + kiểm `iss`/`aud`/`exp` (chống alg-confusion). Role lấy từ claim đã ký, KHÔNG tin `role` trong body. *(HS256/`AUTH_JWT_SECRET` đã bỏ.)*
 - **mTLS qua env:** `T8_SSL_CA`, `ROUTER_CLIENT_CERT/KEY`, `ECALL_POOL_URL=https://...`. Không set thì chạy HTTP trần.
 - **TEE ciphertext push:** `ROUTER_TEE_PUSH_CIPHERTEXT=1` để Router gom `vien_phi_enc` từ Mongo và đẩy vào Pool (mặc định tắt). `C_SOFT_METRICS_PATH` override file số liệu C_soft.
 - **Cột ciphertext MongoDB:** `ma_benh_enc` (DTE, equality), `tuoi_enc` (ORE, range `$gte/$lte`), `vien_phi_enc` (AES-GCM, giải mã để aggregate).
 - **Mã bệnh ICD-10:** luồng chính dùng ICD-10 (`E11`, `I10`, ...). Alias legacy `DTE00x` chỉ bật khi set `ALLOW_LEGACY_DTE_CODES=1`.
 - **Duplicate enclave test file:** chỉ giữ một bản `test_ecall_pool.py`; bản copy handoff đã xoá để tránh lỗi collect.
-- **RBAC/ABAC** (`router/rbac.py` + `router/abac.py`): admin=full · doctor=không `sum_vien_phi` (403) · admin_staff=xem viện phí, che `ma_benh` · researcher=`[MASKED]` vien_phi/ma_benh. **ABAC dept-scoping:** JWT có claim `dept` → bác sĩ chỉ xem khoa mình (Router tiêm `khoa_phong` vào filter, client không nới rộng). `ABAC_REQUIRE_DEPT=1` để strict.
+- **ABAC (engine kiểm soát truy cập DUY NHẤT — `router/abac.py`):** RBAC đã **gộp vào ABAC**; `router/rbac.py` chỉ còn là shim deprecated cho tests cũ. `AbacPolicy` quyết định allow/deny + che cột (role) + dept-scoping (thuộc tính): admin=full · doctor=không `sum_vien_phi` (403) · admin_staff=xem viện phí, che `ma_benh` · researcher=`[MASKED]` vien_phi/ma_benh. **ABAC dept-scoping:** JWT có claim `dept` → bác sĩ chỉ xem khoa mình (Router tiêm `khoa_phong` vào filter, client không nới rộng). `ABAC_REQUIRE_DEPT=1` để strict.
 - **Stack Python:** FastAPI + pymongo + cryptography + pyope + hvac + PyJWT (xem `requirements.txt`).
 - **Shell:** môi trường Windows + WSL (kali); dùng Bash tool cho script POSIX.
 

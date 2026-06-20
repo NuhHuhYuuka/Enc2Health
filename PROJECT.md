@@ -27,12 +27,12 @@ Tài liệu này liệt kê **toàn bộ** nội dung đồ án, chia rõ **✅ 
 ## 1. Kiến trúc tổng thể
 
 ```
-Client (doctor / admin / researcher) + JWT
-        ↓  POST /query
+Client → IAM (Auth Server :8080 — Nam) cấp JWT ES256
+        ↓  POST /query  + Bearer JWT
 ┌──────────────────────────────────────────────────────────────┐
 │  Query Router (FastAPI :8000) — Nam                            │
-│   1. Auth: JWT Bearer (HS256) → role                           │
-│   2. RBAC/ABAC: check quyền + mask field nhạy cảm              │
+│   1. Auth: VERIFY JWT ES256 (public key) → role/dept          │
+│   2. ABAC (engine duy nhất): check quyền + mask + dept-scope   │
 │   3. QueryRouter: phân loại operator → SOFTWARE | TEE          │
 │   4. Cost Model: ước lượng C_soft vs C_TEE (RSS profile)       │
 │   5. Adaptive Controller: nếu EPC > 80% → fallback TEE→SOFT    │
@@ -98,8 +98,8 @@ Observability: Prometheus (:9090) + Grafana dashboard + exporter (:8002) — Lan
 ### 3.2. Query Router & Adaptive — Nam (`router/`, `common/`)
 - ✅ **QueryRouter (T1)** — `router/query_router.py`: phân loại `sum/avg/count_distinct → TEE`; `count/=/join/group_by/range → SOFTWARE` (đủ operator theo kịch bản).
 - ✅ **Cost Model (T2)** — `router/cost_model.py`: TEE nội suy từ RSS profile thật của Lan; **C_soft đọc số liệu thật từ `crypto/benchmark/c_soft_metrics.json`** (Long); `compare_costs(n)` so sánh 2 mode + `cheaper_mode`. `main.py` dùng **n_records thật** (bỏ hard-code 1000).
-- ✅ **RBAC/ABAC (T4)** — `router/rbac.py` + `router/abac.py`: 4 role (admin/doctor/admin_staff/researcher), column-level masking (`vien_phi`, `ma_benh`), **ABAC dept-scoping** — bác sĩ chỉ xem bệnh nhân khoa mình (thuộc tính `dept` trong JWT → Router tiêm filter `khoa_phong_enc` DTE, client không nới rộng được). Demo: `scripts/demo_abac.py`.
-- ✅ **Auth JWT** — `common/auth.py` + `router/auth.py`: HS256 Bearer, iss/aud, `generate_test_jwt`; fallback `INTERNAL_AUTH_TOKEN`.
+- ✅ **ABAC — engine kiểm soát truy cập DUY NHẤT (T4)** — `router/abac.py` (RBAC đã **gộp vào ABAC**; `router/rbac.py` chỉ còn shim deprecated cho tests): 4 role (admin/doctor/admin_staff/researcher), column-level masking (`vien_phi`, `ma_benh`), **ABAC dept-scoping** — bác sĩ chỉ xem bệnh nhân khoa mình (thuộc tính `dept` trong JWT → Router tiêm filter `khoa_phong`, client không nới rộng được). Demo: `scripts/demo_abac.py`.
+- ✅ **Auth JWT ES256 + node IAM** — `common/auth.py` (ký/verify) + `iam/main.py` (Auth Server :8080): JWT **ký ES256 (ECDSA P-256)**, **chỉ IAM giữ private key** (`crypto/data/keys/jwt_es256_private.pem`) để ký; Router/Pool chỉ **verify** bằng public key. `validate_jwt_bearer` khóa cứng `algorithms=["ES256"]` + iss/aud/exp (chống alg-confusion). Sinh khóa: `crypto/data/generate_jwt_keys.py`. `router/auth.py` = shim. *(HS256/`AUTH_JWT_SECRET` đã bỏ.)*
 - ✅ **Probing (T5)** — `router/probing.py`: thread probe mỗi 5s, lock baseline sau 3 lần, phát hiện latency ≥ 2× baseline.
 - ✅ **Adaptive Controller (T6)** — `router/adaptive.py`: state machine NORMAL ⇄ FALLBACK với **hysteresis** (fallback ≥80%, restore ≤60% chống flapping), núm mô phỏng áp lực (`set_simulated_pressure` + `/adaptive/simulate`), switch log có pressure/nguồn, endpoint `/adaptive`.
 - ✅ **ECALL client (T9)** — `router/ecall_client.py`: HTTP client tới pool, JWT Bearer tự sinh, hỗ trợ mTLS cert + `/attest` verification (MRENCLAVE + chữ ký HMAC + freshness), fallback `httpx`→`requests` khi mTLS lỗi; **`query(..., ciphertexts=...)` đẩy kèm bản mã vào enclave** (TEE path).

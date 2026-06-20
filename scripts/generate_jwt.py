@@ -8,13 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common.auth import generate_test_jwt
 
 def main():
-    secret = os.environ.get("AUTH_JWT_SECRET")
-    if not secret:
-        print("Set AUTH_JWT_SECRET in environment to generate a test JWT", file=sys.stderr)
-        sys.exit(2)
+    # ES256: ký bằng private key trong crypto/data/keys/ (sinh bằng generate_jwt_keys.py).
     sub = os.environ.get("AUTH_SUBJECT", "router-service")
     role = os.environ.get("AUTH_ROLE", "service")
-    token = generate_test_jwt(sub, role)
+    try:
+        token = generate_test_jwt(sub, role)
+    except RuntimeError as exc:
+        print(f"{exc}", file=sys.stderr)
+        sys.exit(2)
     print(token)
 
 if __name__ == '__main__':

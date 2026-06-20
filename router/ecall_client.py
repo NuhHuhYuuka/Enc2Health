@@ -24,15 +24,14 @@ TIMEOUT_S = 30
 
 
 def _auth_jwt() -> str:
+    # Ưu tiên service token do IAM cấp (set qua env AUTH_JWT) — Router không cần ký.
     token = os.environ.get("AUTH_JWT")
     if token:
         return token
-    secret = os.environ.get("AUTH_JWT_SECRET")
-    if not secret:
-        raise RuntimeError("AUTH_JWT not set and AUTH_JWT_SECRET missing")
-    # common.auth reads AUTH_JWT_SECRET from process env at import time, so set it here.
-    os.environ["AUTH_JWT_SECRET"] = secret
-    return generate_test_jwt(os.environ.get("AUTH_SUBJECT", "router-service"), os.environ.get("AUTH_ROLE", "service"))
+    # Fallback dev: ký service token bằng ES256 private key (chỉ chạy được nếu node
+    # này có keypair trong crypto/data/keys/). sign_jwt sẽ báo lỗi rõ nếu thiếu.
+    return generate_test_jwt(os.environ.get("AUTH_SUBJECT", "router-service"),
+                             os.environ.get("AUTH_ROLE", "service"))
 
 
 def _verify_attestation_document(data: dict) -> bool:
