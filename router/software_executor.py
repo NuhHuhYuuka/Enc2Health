@@ -59,36 +59,55 @@ class SoftwareExecutor:
         )
         self.collection = self.client[DEFAULT_DB_NAME][DEFAULT_COLLECTION]
         self.sse_collection = self.client[DEFAULT_DB_NAME][DEFAULT_SSE_COLLECTION]
-        self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key")
-        self._dte_khoa = self._load_dte_cipher("dte_khoa.key")
-        self._dte_cmnd = self._load_dte_cipher("dte_cmnd.key")
-        self._gcm = self._load_gcm_cipher("gcm_dek.key")
-        self._ore = self._load_ore_cipher("ore.key")
-        self._sse = self._load_sse_cipher("sse.key")
+        self._vault_key_source = os.environ.get("SOFTWARE_KEY_SOURCE", "local").lower() == "vault"
+        self._dte_ma_benh = self._load_dte_cipher("dte_ma_benh.key", "dte_ma_benh")
+        self._dte_khoa = self._load_dte_cipher("dte_khoa.key", "dte_khoa")
+        self._dte_cmnd = self._load_dte_cipher("dte_cmnd.key", "dte_cmnd")
+        self._gcm = self._load_gcm_cipher("gcm_dek.key", "gcm_dek")
+        self._ore = self._load_ore_cipher("ore.key", "ore_key")
+        self._sse = self._load_sse_cipher("sse.key", "sse_key")
         self._fallback_records = self._build_fallback_records(int(os.environ.get("EHR_RECORD_COUNT", "10000")))
         self._mongo_available = self._detect_mongo_available()
         if STRICT_MODE and not self._mongo_available:
             raise RuntimeError("SOFTWARE_STRICT_MODE=1 but MongoDB is unavailable")
 
-    def _load_dte_cipher(self, filename: str) -> DTECipher | None:
+    def _vault_key(self, key_name: str) -> bytes | None:
+        if not self._vault_key_source:
+            return None
+        from crypto.vault.vault_client import get_dek
+        return get_dek(key_name)
+
+    def _load_dte_cipher(self, filename: str, vault_name: str) -> DTECipher | None:
+        vault_key = self._vault_key(vault_name)
+        if vault_key is not None:
+            return DTECipher(vault_key)
         path = KEY_DIR / filename
         if not path.exists():
             return None
         return DTECipher.load_key(str(path))
 
-    def _load_ore_cipher(self, filename: str) -> ORECipher | None:
+    def _load_ore_cipher(self, filename: str, vault_name: str) -> ORECipher | None:
+        vault_key = self._vault_key(vault_name)
+        if vault_key is not None:
+            return ORECipher(vault_key)
         path = KEY_DIR / filename
         if not path.exists():
             return None
         return ORECipher.load_key(str(path))
 
-    def _load_gcm_cipher(self, filename: str) -> AESGCMCipher | None:
+    def _load_gcm_cipher(self, filename: str, vault_name: str) -> AESGCMCipher | None:
+        vault_key = self._vault_key(vault_name)
+        if vault_key is not None:
+            return AESGCMCipher(vault_key)
         path = KEY_DIR / filename
         if not path.exists():
             return None
         return AESGCMCipher.load_key(str(path))
 
-    def _load_sse_cipher(self, filename: str) -> StaticSSECipher | None:
+    def _load_sse_cipher(self, filename: str, vault_name: str) -> StaticSSECipher | None:
+        vault_key = self._vault_key(vault_name)
+        if vault_key is not None:
+            return StaticSSECipher(vault_key)
         path = KEY_DIR / filename
         if not path.exists():
             return None
@@ -281,6 +300,11 @@ class SoftwareExecutor:
     def mongo_available(self) -> bool:
         return self._mongo_available
 
+    def _refresh_mongo_available(self) -> bool:
+        """Re-check MongoDB after startup; remote services may come up later."""
+        self._mongo_available = self._detect_mongo_available()
+        return self._mongo_available
+
     def fetch_vien_phi_ciphertexts(self, filters: Dict[str, Any]) -> list[str]:
         return self.fetch_ciphertexts("avg_vien_phi", filters)
 
@@ -289,7 +313,7 @@ class SoftwareExecutor:
 
         Router dùng hàm này ở TEE mode để gom bản mã rồi đẩy vào Enclave.
         """
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             if STRICT_MODE:
                 raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids ciphertext fallback without MongoDB")
             return []
@@ -304,7 +328,7 @@ class SoftwareExecutor:
 
     def fetch_patient_pii_ciphertext(self, patient_id: str) -> dict[str, Any]:
         """Lấy `pii_enc` và khoa của một bệnh nhân từ MongoDB, không giải mã."""
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             raise RuntimeError("MongoDB unavailable; cannot fetch patient PII ciphertext")
 
         candidates: list[dict[str, Any]] = [{"patient_id": patient_id}]
@@ -370,7 +394,7 @@ class SoftwareExecutor:
 
     def fetch_patient_pii_ciphertext_by_cmnd(self, cmnd: str) -> dict[str, Any]:
         """Lấy `pii_enc` và khoa của một bệnh nhân từ MongoDB bằng cmnd (CCCD)."""
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             raise RuntimeError("MongoDB unavailable; cannot fetch patient PII by CCCD")
         if self._dte_cmnd is None:
             raise RuntimeError("dte_cmnd key not available")
@@ -442,7 +466,7 @@ class SoftwareExecutor:
         normalized = normalize_keyword(display_keyword)
         if not normalized:
             raise ValueError("keyword is required")
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             if STRICT_MODE:
                 raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids SSE fallback path")
             return self._fallback_keyword_search(normalized, filters)
@@ -500,7 +524,7 @@ class SoftwareExecutor:
         }
 
     def query(self, query_type: str, filters: Dict[str, Any]) -> SoftwareQueryResult:
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             if STRICT_MODE:
                 raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids mock fallback path")
             return self._fallback_aggregate(query_type, filters)
@@ -554,7 +578,7 @@ class SoftwareExecutor:
             return False
 
     def count(self, filters: Dict[str, Any]) -> SoftwareQueryResult:
-        if not self._mongo_available:
+        if not self._mongo_available and not self._refresh_mongo_available():
             if STRICT_MODE:
                 raise RuntimeError("SOFTWARE_STRICT_MODE=1 forbids mock fallback path")
             n_records = self._fallback_count(filters)

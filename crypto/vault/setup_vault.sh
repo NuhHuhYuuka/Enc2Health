@@ -62,11 +62,15 @@ wrap_and_store_dek dte_ma_benh "$KEY_DIR/dte_ma_benh.key" "AES-SIV-256" "icd10_e
 
 wrap_and_store_dek dte_khoa "$KEY_DIR/dte_khoa.key" "AES-SIV-256" "department_equality_search"
 
+wrap_and_store_dek dte_cmnd "$KEY_DIR/dte_cmnd.key" "AES-SIV-256" "citizen_id_equality_search"
+
 wrap_and_store_dek ore_key "$KEY_DIR/ore.key" "OPE-Boldyreva" "age_date_range_query"
 
-echo "=== [4/4] Tạo Vault policy cho Enclave (Lan) ==="
+wrap_and_store_dek sse_key "$KEY_DIR/sse.key" "HMAC-SHA256+AES-GCM" "clinical_keyword_search"
+
+echo "=== [4/4] Tạo Vault policy và AppRole cho Enclave (Lan) ==="
 cat <<'POLICY' | vault policy write enclave-policy -
-path "enc2health/keypairs/*" {
+path "enc2health/data/keypairs/*" {
   capabilities = ["read"]
 }
 path "enc2health/data/dek/*" {
@@ -80,11 +84,23 @@ path "transit/decrypt/enc2health-transit" {
 }
 POLICY
 
+vault auth enable approle 2>/dev/null || echo "  AppRole already enabled"
+vault write auth/approle/role/enc2health-enclave \
+  token_policies="enclave-policy" \
+  token_ttl="1h" \
+  token_max_ttl="4h" >/dev/null
+
+ROLE_ID=$(vault read -field=role_id auth/approle/role/enc2health-enclave/role-id)
+SECRET_ID=$(vault write -f -field=secret_id auth/approle/role/enc2health-enclave/secret-id)
+printf '%s\n' "$ROLE_ID" > /tmp/enc2health-vault-role-id
+printf '%s\n' "$SECRET_ID" > /tmp/enc2health-vault-secret-id
+chmod 600 /tmp/enc2health-vault-role-id /tmp/enc2health-vault-secret-id
+
 cat <<'POLICY' | vault policy write kms-api-policy -
 path "enc2health/data/dek/*" {
   capabilities = ["read"]
 }
-path "enc2health/keypairs/*/public_key" {
+path "enc2health/data/keypairs/*" {
   capabilities = ["read"]
 }
 path "transit/decrypt/enc2health-transit" {
@@ -96,3 +112,5 @@ echo ""
 echo "✅ Vault setup complete!"
 echo "   List secrets: vault kv list enc2health/keypairs/"
 echo "   Get keypair:  vault kv get enc2health/keypairs/Noi"
+echo "   AppRole role_id:   /tmp/enc2health-vault-role-id"
+echo "   AppRole secret_id: /tmp/enc2health-vault-secret-id"

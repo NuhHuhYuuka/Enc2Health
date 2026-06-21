@@ -69,7 +69,13 @@ async def handle_query(req: QueryRequest, request: Request):
         raise HTTPException(status_code=401, detail="missing Authorization header")
     claims = validate_jwt_bearer(auth_hdr)
     role = claims.get("role", "doctor")
-    subject = Subject(role=role, dept=claims.get("dept"))
+    subject = Subject(
+        role=role,
+        dept=claims.get("dept"),
+        job_title=claims.get("job_title"),
+        clearance=claims.get("clearance"),
+        purpose=claims.get("purpose"),
+    )
 
     # T4 - ABAC check (role + thuộc tính khoa)
     access = abac.evaluate(subject, req.query_type)
@@ -180,7 +186,13 @@ async def handle_search(req: SearchRequest, request: Request):
         raise HTTPException(status_code=401, detail="missing Authorization header")
     claims = validate_jwt_bearer(auth_hdr)
     role = claims.get("role", req.role)
-    subject = Subject(role=role, dept=claims.get("dept"))
+    subject = Subject(
+        role=role,
+        dept=claims.get("dept"),
+        job_title=claims.get("job_title"),
+        clearance=claims.get("clearance"),
+        purpose=claims.get("purpose"),
+    )
 
     access = abac.evaluate(subject, "keyword_search")
     if not access.allowed:

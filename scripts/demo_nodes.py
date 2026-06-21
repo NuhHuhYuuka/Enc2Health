@@ -8,8 +8,12 @@ từ Mongo → con số từ enclave), kèm trạng thái sống/chết của t�
 
 Dùng cho buổi bảo vệ: chứng minh các node tương tác THẬT, không phải animation.
 
-Chạy (cần Router :8000, Pool :9091, Mongo :27017 đang chạy; cùng AUTH_JWT_SECRET):
-    AUTH_JWT_SECRET=dev-secret-32-bytes-long-1234567890 python3 scripts/demo_nodes.py
+Chạy với Authentication Server ES256:
+    AUTH_URL=https://nam.example.ts.net:8080 \
+    ROUTER_URL=https://nam.example.ts.net:8000 \
+    python3 scripts/demo_nodes.py
+
+Nếu không đặt AUTH_URL, script dùng bộ tạo JWT local tương thích demo cũ.
     # tuỳ chọn: python3 scripts/demo_nodes.py <query_type> <ma_benh> <tuoi_min> <role>
 """
 from __future__ import annotations
@@ -24,11 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import httpx
 
 os.environ.setdefault("AUTH_JWT_SECRET", "dev-secret-32-bytes-long-1234567890")
-import common.auth as ca
-ca.JWT_SECRET = os.environ["AUTH_JWT_SECRET"]
 from common.auth import generate_test_jwt
 
 ROUTER = os.environ.get("ROUTER_URL", "http://127.0.0.1:8000")
+AUTH_URL = os.environ.get("AUTH_URL")
 
 # ── màu ANSI ────────────────────────────────────────────────
 R="\033[0m"; B="\033[1m"; DIM="\033[2m"
@@ -107,7 +110,16 @@ def main():
     NODE = {"cli": c("👤 Client", CY), "rt": c("🧠 Router", BL), "mg": c("🗄️  MongoDB", GR),
             "en": c("🔒 Enclave/TEE", MA), "va": c("🔑 Vault", YE)}
 
-    tok = generate_test_jwt(f"trace-{role}", role, claims={"dept": dept} if dept else None)
+    if AUTH_URL:
+        token_response = httpx.post(
+            f"{AUTH_URL.rstrip('/')}/token",
+            json={"username": f"trace-{role}", "role": role, "dept": dept},
+            timeout=10,
+        )
+        token_response.raise_for_status()
+        tok = token_response.json()["access_token"]
+    else:
+        tok = generate_test_jwt(f"trace-{role}", role, claims={"dept": dept} if dept else None)
     t0 = time.perf_counter()
     r = httpx.post(f"{ROUTER}/query", json={"query_type": qtype, "filters": filters, "role": role},
                    headers={"Authorization": f"Bearer {tok}"}, timeout=30)

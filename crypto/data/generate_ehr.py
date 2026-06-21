@@ -33,6 +33,23 @@ fake = Faker("vi_VN")
 fake.seed_instance(DATASET_SEED)
 
 DEPARTMENTS = ["Noi", "Ngoai", "Cap_cuu", "Tim_mach", "Than_kinh", "Nhi"]
+DEMO_PATIENTS = [
+    {
+        "ho_ten": "An Vũ",
+        "cmnd": "03321819600",
+        "dept": "Nhi",
+        "ma_benh": "P01",
+        "tom_tat_benh_an": (
+            "Trẻ sốt nhẹ kèm ho khan kéo dài, thở rút lõm lồng ngực nhẹ, "
+            "nghe phổi có ran ẩm vùng đáy phổi."
+        ),
+    },
+    {"ho_ten": "Quang Đức Nguyễn", "cmnd": "07816184959", "dept": "Noi", "ma_benh": "I01"},
+    {"ho_ten": "Hải Nguyễn", "cmnd": "05641395376", "dept": "Tim_mach"},
+    {"ho_ten": "Nam Lê", "cmnd": "06542351161", "dept": "Cap_cuu"},
+    {"ho_ten": "Tùng Nguyễn", "cmnd": "01845146270", "dept": "Than_kinh"},
+    {"ho_ten": "Lâm Phạm", "cmnd": "08908386379", "dept": "Ngoai"},
+]
 DEPARTMENT_DISEASES = {
     "Nhi": {
         "P01": "Viêm phổi ở trẻ em",
@@ -329,10 +346,11 @@ def main():
     sse_index: dict[str, list[dict[str, str]]] = {}
 
     for i in range(RECORD_COUNT):
-        dept    = random.choice(DEPARTMENTS)
+        demo_patient = DEMO_PATIENTS[i] if i < len(DEMO_PATIENTS) else None
+        dept    = demo_patient["dept"] if demo_patient else random.choice(DEPARTMENTS)
         pub_pem = dept_keypairs[dept]["public_pem"].encode()
         dept_diseases = DEPARTMENT_DISEASES[dept]
-        ma_benh = random.choice(list(dept_diseases.keys()))
+        ma_benh = demo_patient.get("ma_benh") if demo_patient and demo_patient.get("ma_benh") else random.choice(list(dept_diseases.keys()))
         tuoi = random.randint(1, 15) if dept == "Nhi" else random.randint(16, 95)
         ngay_nhap = random_date()
         ngay_sinh = birth_date_from_age(ngay_nhap, tuoi)
@@ -342,7 +360,11 @@ def main():
             diagnosis=chan_doan,
             dept=dept.replace("_", " "),
         )
-        tom_tat_benh_an = random.choice(CLINICAL_SUMMARIES[ma_benh])
+        tom_tat_benh_an = (
+            demo_patient.get("tom_tat_benh_an")
+            if demo_patient and demo_patient.get("tom_tat_benh_an")
+            else random.choice(CLINICAL_SUMMARIES[ma_benh])
+        )
         phac_do_dieu_tri = random.choice(TREATMENT_PROTOCOLS[ma_benh])
         ket_qua_xn = {
             "glucose": round(random.uniform(3.5, 15.0), 1),   # mmol/L
@@ -350,8 +372,8 @@ def main():
             "creatinine": round(random.uniform(50, 300), 0),  # umol/L
         }
 
-        ho_ten = fake.name()
-        cmnd = fake.numerify("0##########")
+        ho_ten = demo_patient["ho_ten"] if demo_patient else fake.name()
+        cmnd = demo_patient["cmnd"] if demo_patient else fake.numerify("0##########")
         dia_chi = generate_vietnamese_address()
         pii_payload = {
             "ho_ten": ho_ten,

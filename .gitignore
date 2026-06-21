@@ -13,3 +13,9 @@ __pycache__/
 *.pid
 .local/mongo/
 *.a
+
+# Demo runtime credentials and machine-specific TLS certificates
+runtime/auth/
+crypto/data/keys/jwt_es256_*.pem
+*.tail*.ts.net.crt
+*.tail*.ts.net.key

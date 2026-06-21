@@ -48,6 +48,9 @@ class TokenRequest(BaseModel):
     # Chỗ móc cho xác thực thật (chưa kiểm ở bản demo):
     username: Optional[str] = None
     password: Optional[str] = None
+    job_title: Optional[str] = None
+    clearance: Optional[str] = None
+    purpose: Optional[str] = None
 
 
 @app.post("/token")
@@ -58,7 +61,21 @@ async def issue_token(req: TokenRequest):
     if REQUIRE_LOGIN and not (req.username and req.password):
         raise HTTPException(status_code=401, detail="cần username/password (IAM_REQUIRE_LOGIN=1)")
 
-    claims = {"dept": req.dept} if req.dept else None
+    defaults = {
+        "doctor": ("doctor", "clinical", "treatment"),
+        "admin_staff": ("admin_staff", "administrative", "patient_admission"),
+        "admin": ("system_admin", "full", "system_administration"),
+        "researcher": ("researcher", "deidentified", "research"),
+        "service": ("router_service", "internal", "service_to_service"),
+    }
+    job_title, clearance, purpose = defaults[req.role]
+    claims = {
+        "dept": req.dept,
+        "job_title": req.job_title or job_title,
+        "clearance": req.clearance or clearance,
+        "purpose": req.purpose or purpose,
+    }
+    claims = {key: value for key, value in claims.items() if value is not None}
     subject = req.sub or f"{req.role}-{req.dept or 'any'}"
     try:
         token = sign_jwt(subject, req.role, lifetime_s=req.lifetime_s, claims=claims)
@@ -70,6 +87,7 @@ async def issue_token(req: TokenRequest):
         "alg": JWT_ALG,
         "role": req.role,
         "dept": req.dept,
+        "claims": claims,
         "expires_in": req.lifetime_s,
     }
 

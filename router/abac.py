@@ -49,6 +49,7 @@ DEPT_SCOPED_ROLES = {"doctor"}
 
 # Strict mode: vai trò dept-scoped mà THIẾU dept → từ chối. Mặc định tắt (token cũ).
 ABAC_REQUIRE_DEPT = os.environ.get("ABAC_REQUIRE_DEPT", "0") == "1"
+ABAC_REQUIRE_PURPOSE = os.environ.get("ABAC_REQUIRE_PURPOSE", "0") == "1"
 
 
 @dataclass
@@ -56,6 +57,9 @@ class Subject:
     """Chủ thể truy cập, dựng từ JWT claims."""
     role: str
     dept: Optional[str] = None
+    job_title: Optional[str] = None
+    clearance: Optional[str] = None
+    purpose: Optional[str] = None
 
 
 @dataclass
@@ -89,6 +93,25 @@ class AbacPolicy:
         decision = self._role_check(subject.role, query_type)
         if not decision.allowed:
             return decision
+
+        normalized_query_type = query_type.lower().strip().replace("-", "_")
+        if (
+            ABAC_REQUIRE_PURPOSE
+            and subject.role == "admin_staff"
+            and normalized_query_type in {"get_patient", "lookup_patient"}
+            and (
+                subject.job_title != "admin_staff"
+                or subject.purpose != "patient_admission"
+                or subject.clearance != "administrative"
+            )
+        ):
+            return AbacDecision(
+                allowed=False,
+                reason=(
+                    "ABAC denied: PII lookup requires job_title=admin_staff, "
+                    "clearance=administrative and purpose=patient_admission"
+                ),
+            )
 
         scope: Dict[str, str] = {}
         if subject.role in DEPT_SCOPED_ROLES and subject.dept:
